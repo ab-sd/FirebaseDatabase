@@ -4,4 +4,6 @@
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="open_drawer">Open navigation</string>
     <string name="close_drawer">Close navigation</string>
+    <string name="cloudinary_cloud_name">dwbgsgiw5</string>
+    <string name="cloudinary_upload_preset">andorid_demo</string>
 </resources>

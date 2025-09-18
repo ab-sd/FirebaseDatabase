@@ -57,6 +57,11 @@ dependencies {
     // Optional - Firebase Analytics (helps debugging)
     implementation("com.google.firebase:firebase-analytics-ktx")
 
+    // Add (or update) these lines in app/build.gradle dependencies
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

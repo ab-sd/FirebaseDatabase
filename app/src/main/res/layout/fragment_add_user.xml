@@ -1,36 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:padding="16dp"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <com.google.android.material.textfield.TextInputLayout
+    <LinearLayout
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/et_username"
-            android:hint="Username"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-    </com.google.android.material.textfield.TextInputLayout>
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:layout_marginTop="12dp"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/et_age"
-            android:inputType="number"
-            android:hint="Age"
+        <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-    </com.google.android.material.textfield.TextInputLayout>
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_username"
+                android:hint="Username"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-    <Button
-        android:id="@+id/btn_save"
-        android:layout_marginTop="16dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Save" />
-</LinearLayout>
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_age"
+                android:inputType="number"
+                android:hint="Age"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <Button
+            android:id="@+id/btn_pick_images"
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Pick Images (max 5)" />
+
+        <TextView
+            android:id="@+id/tv_images_count"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No images selected" />
+
+        <HorizontalScrollView
+            android:layout_marginTop="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="100dp">
+            <LinearLayout
+                android:id="@+id/ll_selected_images"
+                android:orientation="horizontal"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"/>
+        </HorizontalScrollView>
+
+        <!-- NEW: Upload images to Cloudinary -->
+        <Button
+            android:id="@+id/btn_upload_images"
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Upload Images to Cloudinary" />
+
+        <!-- Keep existing Save button (saves Firestore doc) -->
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_marginTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Save" />
+
+    </LinearLayout>
+</ScrollView>
