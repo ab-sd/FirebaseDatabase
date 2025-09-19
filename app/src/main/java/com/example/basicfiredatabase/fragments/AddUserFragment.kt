@@ -70,7 +70,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     onComplete = { urls ->
                         uploadedImageUrls.clear()
                         uploadedImageUrls.addAll(urls)
-                        Toast.makeText(requireContext(), "Uploaded ${urls.size} image(s) to Cloudinary", Toast.LENGTH_LONG).show()
+                        Toast.makeText(requireContext(), "Uploaded ${urls.size} image(s)", Toast.LENGTH_LONG).show()
                         btnUpload.isEnabled = true
                         btnPick.isEnabled = true
                     },

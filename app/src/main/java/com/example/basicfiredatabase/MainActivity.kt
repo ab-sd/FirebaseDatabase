@@ -11,6 +11,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.example.basicfiredatabase.fragments.AddUserFragment
+import com.example.basicfiredatabase.fragments.AllUsersFragment
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -34,13 +35,6 @@ class MainActivity : AppCompatActivity() {
 
         // init firebase
         FirebaseApp.initializeApp(this)
-
-        // optional test write (you can remove this after testing)
-        val data = hashMapOf("message" to "Hello Firestore!")
-        db.collection("messages")
-            .add(data)
-            .addOnSuccessListener { document -> Log.d("Firestore", "Document added: ${document.id}") }
-            .addOnFailureListener { e -> Log.w("Firestore", "Error", e) }
 
         // Drawer + toolbar setup
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
@@ -66,6 +60,15 @@ class MainActivity : AppCompatActivity() {
                     drawerLayout.closeDrawer(GravityCompat.START)
                     true
                 }
+                R.id.nav_view_users -> {
+                    supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, AllUsersFragment())
+                        .addToBackStack(null)
+                        .commit()
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                    true
+                }
+
                 else -> false
             }
         }
