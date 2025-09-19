@@ -148,14 +148,11 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         onError: (String) -> Unit
     ) {
         withContext(Dispatchers.IO) {
-            val cloudName = getString(R.string.cloudinary_cloud_name)
-            val uploadPreset = getString(R.string.cloudinary_upload_preset)
             val client = OkHttpClient()
             val uploaded = mutableListOf<String>()
 
             try {
                 for ((index, uri) in selectedImageUris.withIndex()) {
-                    // open the image bytes
                     val input: InputStream = requireContext().contentResolver.openInputStream(uri)
                         ?: throw Exception("Cannot open image #$index")
                     val bytes = input.readBytes()
@@ -167,34 +164,30 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     val requestBody = MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("file", "upload_$index.jpg", fileBody)
-                        .addFormDataPart("upload_preset", uploadPreset)
-                        .addFormDataPart("folder", "events") // 👈 all uploads go into "users" folder
                         .build()
 
-                    val url = "https://api.cloudinary.com/v1_1/$cloudName/image/upload"
-                    val request = Request.Builder().url(url).post(requestBody).build()
-                    val response = client.newCall(request).execute()
+                    val request = Request.Builder()
+                        .url("https://cloudinaryserver.onrender.com/upload")
+                        .post(requestBody)
+                        .build()
 
+                    val response = client.newCall(request).execute()
                     val responseBody = response.body?.string()
                     if (!response.isSuccessful || responseBody.isNullOrEmpty()) {
                         throw Exception("HTTP ${response.code}: ${responseBody ?: "empty response"}")
                     }
 
                     val json = JSONObject(responseBody)
-                    val secureUrl = json.optString("secure_url", "")
-                    if (secureUrl.isBlank()) throw Exception("No secure_url in response")
-                    uploaded.add(secureUrl)
+                    val url = json.optString("url", "")
+                    if (url.isBlank()) throw Exception("No URL in response")
+                    uploaded.add(url)
                 }
 
-                // back to main thread to call completion
-                withContext(Dispatchers.Main) {
-                    onComplete(uploaded)
-                }
+                withContext(Dispatchers.Main) { onComplete(uploaded) }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    onError(e.message ?: "Upload failed")
-                }
+                withContext(Dispatchers.Main) { onError(e.message ?: "Upload failed") }
             }
         }
     }
+
 }
