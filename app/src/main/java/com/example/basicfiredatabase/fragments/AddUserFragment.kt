@@ -14,6 +14,8 @@ import androidx.lifecycle.lifecycleScope
 import com.example.basicfiredatabase.R
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.remoteconfig.ktx.remoteConfig
+import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -32,6 +34,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     private val selectedImageUris = mutableListOf<Uri>()
     private val uploadedImages = mutableListOf<Map<String, String>>() // url + public_id
 
+    private var backendUrl: String? = null
     private val pickImagesLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         selectedImageUris.clear()
         if (uris != null && uris.isNotEmpty()) {
@@ -50,6 +53,36 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         val btnSave = view.findViewById<Button>(R.id.btn_save)
         val tvImagesCount = view.findViewById<TextView>(R.id.tv_images_count)
         val llImages = view.findViewById<LinearLayout>(R.id.ll_selected_images)
+
+        // Remote Config setup
+        val remoteConfig = Firebase.remoteConfig
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 3600 // fetch once per hour
+        }
+
+        remoteConfig.setConfigSettingsAsync(configSettings)
+
+        // as a fallback if Remote Config fails
+        remoteConfig.setDefaultsAsync(
+            mapOf("uploadImage_url" to "https://cloudinaryserver.onrender.com/upload")
+        )
+
+
+
+
+// Fetch the latest values
+        remoteConfig.fetchAndActivate()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    backendUrl = remoteConfig.getString("uploadImage_url")
+//                    Toast.makeText(requireContext(), "Fetched URL: $backendUrl", Toast.LENGTH_SHORT)
+//                        .show()
+                } else {
+                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            }
+
 
         _tvImagesCount = tvImagesCount
         _llImages = llImages
@@ -143,7 +176,11 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         onError: (String) -> Unit
     ) {
         withContext(Dispatchers.IO) {
+
+
             val client = OkHttpClient()
+
+
             val uploaded = mutableListOf<Map<String, String>>()
 
             try {
@@ -162,7 +199,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         .build()
 
                     val request = Request.Builder()
-                        .url("https://cloudinaryserver.onrender.com/upload")
+                        .url(backendUrl!!) // use Remote Config value
                         .post(requestBody)
                         .build()
 

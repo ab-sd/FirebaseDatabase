@@ -14,6 +14,8 @@ import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.models.UserImage
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.remoteconfig.ktx.remoteConfig
+import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,6 +29,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
     private val db = Firebase.firestore
     private lateinit var rv: RecyclerView
+
+    private var deleteImage_url: String? = null
+
 
     private val adapter = UserAdapter(
         onEdit = { user ->
@@ -74,6 +79,38 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
 
+
+        // --- Remote Config setup for deleteImage_url ---
+        val remoteConfig = Firebase.remoteConfig
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 3600 // always fetch fresh for testing
+        }
+        remoteConfig.setConfigSettingsAsync(configSettings)
+
+        // as a fallback if Remote Config fails
+        remoteConfig.setDefaultsAsync(
+            mapOf("deleteImage_url" to "https://cloudinaryserver.onrender.com/delete")
+        )
+
+        remoteConfig.fetchAndActivate()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    deleteImage_url = remoteConfig.getString("deleteImage_url")
+                    Toast.makeText(
+                        requireContext(),
+                        "Fetched delete URL: $deleteImage_url",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "Failed to fetch delete URL from Remote Config",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
+
         // realtime listener - keeps UI updated
         db.collection("users")
             .addSnapshotListener { snapshots, e ->
@@ -114,7 +151,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         .toRequestBody("application/json".toMediaTypeOrNull())
 
                     val request = Request.Builder()
-                        .url("https://cloudinaryserver.onrender.com/delete")
+                        .url(deleteImage_url!!)
                         .post(body)
                         .build()
 

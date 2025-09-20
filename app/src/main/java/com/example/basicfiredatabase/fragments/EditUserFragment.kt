@@ -10,6 +10,8 @@ import androidx.lifecycle.lifecycleScope
 import com.example.basicfiredatabase.R
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.remoteconfig.ktx.remoteConfig
+import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -24,6 +26,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     private val db = Firebase.firestore
     private var userId: String? = null
     private var userImages: List<Map<String, String>> = emptyList()
+
+    private var deleteImage_url: String? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -42,6 +46,39 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
         etName.setText(name)
         etAge.setText(age.toString())
+
+
+        // --- Remote Config setup for deleteImage_url ---
+        val remoteConfig = Firebase.remoteConfig
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 3600 // always fetch fresh for testing
+        }
+        remoteConfig.setConfigSettingsAsync(configSettings)
+
+        // as a fallback if Remote Config fails
+        remoteConfig.setDefaultsAsync(
+            mapOf("deleteImage_url" to "https://cloudinaryserver.onrender.com/delete")
+        )
+
+        remoteConfig.fetchAndActivate()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    deleteImage_url = remoteConfig.getString("deleteImage_url")
+                    Toast.makeText(
+                        requireContext(),
+                        "Fetched delete URL: $deleteImage_url",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "Failed to fetch delete URL from Remote Config",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
+
 
         btnUpdate.setOnClickListener {
             val newName = etName.text.toString().trim()
@@ -101,7 +138,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                         .toRequestBody("application/json".toMediaTypeOrNull())
 
                     val request = Request.Builder()
-                        .url("https://cloudinaryserver.onrender.com/delete")
+                        .url(deleteImage_url!!)
                         .post(body)
                         .build()
 

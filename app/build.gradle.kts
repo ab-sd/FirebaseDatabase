@@ -67,6 +67,8 @@ dependencies {
 // Glide for image loading (network + caching)
     implementation("com.github.bumptech.glide:glide:4.15.1")
 
+    implementation ("com.google.firebase:firebase-config-ktx")
+
 
 
     testImplementation(libs.junit)
