@@ -4,6 +4,11 @@ data class User(
     val id: String,
     val username: String,
     val age: Int? = null,
-    val images: List<String> = emptyList(),
+    val images: List<UserImage> = emptyList(),
     var expanded: Boolean = false
+)
+
+data class UserImage(
+    val url: String,
+    val public_id: String
 )

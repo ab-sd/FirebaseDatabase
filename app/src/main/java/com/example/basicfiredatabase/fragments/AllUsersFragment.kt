@@ -5,13 +5,23 @@ import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.UserAdapter
 import com.example.basicfiredatabase.models.User
+import com.example.basicfiredatabase.models.UserImage
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
@@ -25,6 +35,11 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     putString("id", user.id)
                     putString("username", user.username)
                     putInt("age", user.age ?: 0)
+                    // ✅ also pass images
+                    putSerializable(
+                        "images",
+                        ArrayList(user.images.map { mapOf("url" to it.url, "public_id" to it.public_id) })
+                    )
                 }
             }
             parentFragmentManager.beginTransaction()
@@ -33,15 +48,23 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                 .commit()
         },
         onDelete = { user ->
-            db.collection("users").document(user.id)
-                .delete()
-                .addOnSuccessListener {
-                    Toast.makeText(requireContext(), "Deleted ${user.username}", Toast.LENGTH_SHORT).show()
+            // ✅ launch coroutine for Cloudinary deletion
+            lifecycleScope.launch {
+                val success = deleteImagesFromCloudinary(user.images)
+                if (!success) {
+                    Toast.makeText(requireContext(), "Some images could not be deleted", Toast.LENGTH_LONG).show()
                 }
-                .addOnFailureListener { e ->
-                    Log.w("AllUsersFragment", "Error deleting", e)
-                    Toast.makeText(requireContext(), "Delete failed", Toast.LENGTH_SHORT).show()
-                }
+
+                db.collection("users").document(user.id)
+                    .delete()
+                    .addOnSuccessListener {
+                        Toast.makeText(requireContext(), "Deleted ${user.username}", Toast.LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w("AllUsersFragment", "Error deleting", e)
+                        Toast.makeText(requireContext(), "Delete failed", Toast.LENGTH_SHORT).show()
+                    }
+            }
         }
     )
 
@@ -64,10 +87,46 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     val id = doc.id
                     val username = doc.getString("username") ?: "No name"
                     val age = doc.getLong("age")?.toInt()
-                    val images = (doc.get("images") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+
+                    val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
+                        val map = item as? Map<*, *>
+                        val url = map?.get("url") as? String
+                        val publicId = map?.get("public_id") as? String
+                        if (url != null && publicId != null) {
+                            UserImage(url, publicId)
+                        } else null
+                    } ?: emptyList()
+
                     User(id = id, username = username, age = age, images = images)
                 }
                 adapter.setItems(list)
             }
+    }
+
+    // ✅ helper function to delete from Cloudinary
+    private suspend fun deleteImagesFromCloudinary(images: List<UserImage>): Boolean {
+        if (images.isEmpty()) return true
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                for (image in images) {
+                    val body = JSONObject().put("public_id", image.public_id).toString()
+                        .toRequestBody("application/json".toMediaTypeOrNull())
+
+                    val request = Request.Builder()
+                        .url("https://cloudinaryserver.onrender.com/delete")
+                        .post(body)
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        return@withContext false
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 }

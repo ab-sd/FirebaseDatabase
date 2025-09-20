@@ -50,16 +50,18 @@ class UserAdapter(
             val ctx = holder.itemView.context
             val sizePx = (ctx.resources.displayMetrics.density * 80).toInt()
             val margin = (ctx.resources.displayMetrics.density * 6).toInt()
-            for (url in user.images) {
+
+            for (img in user.images) {
                 val iv = ImageView(ctx)
                 val lp = LinearLayout.LayoutParams(sizePx, sizePx)
                 lp.setMargins(margin, margin, margin, margin)
                 iv.layoutParams = lp
                 iv.scaleType = ImageView.ScaleType.CENTER_CROP
-                Glide.with(ctx).load(url).into(iv)
+                Glide.with(ctx).load(img.url).into(iv)
                 holder.llImages.addView(iv)
             }
         }
+
 
         // expand/collapse on row click
         holder.itemView.setOnClickListener {

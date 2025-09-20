@@ -28,9 +28,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
     private val db by lazy { Firebase.firestore }
 
-    // selections and uploaded URLs
+    // selections and uploaded results
     private val selectedImageUris = mutableListOf<Uri>()
-    private val uploadedImageUrls = mutableListOf<String>()
+    private val uploadedImages = mutableListOf<Map<String, String>>() // url + public_id
 
     private val pickImagesLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         selectedImageUris.clear()
@@ -51,7 +51,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         val tvImagesCount = view.findViewById<TextView>(R.id.tv_images_count)
         val llImages = view.findViewById<LinearLayout>(R.id.ll_selected_images)
 
-        // store references for update function
         _tvImagesCount = tvImagesCount
         _llImages = llImages
 
@@ -62,15 +61,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 Toast.makeText(requireContext(), "No images selected to upload", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            // disable buttons while uploading
             btnUpload.isEnabled = false
             btnPick.isEnabled = false
             lifecycleScope.launchWhenStarted {
                 uploadSelectedImages(
-                    onComplete = { urls ->
-                        uploadedImageUrls.clear()
-                        uploadedImageUrls.addAll(urls)
-                        Toast.makeText(requireContext(), "Uploaded ${urls.size} image(s)", Toast.LENGTH_LONG).show()
+                    onComplete = { images ->
+                        uploadedImages.clear()
+                        uploadedImages.addAll(images)
+                        Toast.makeText(requireContext(), "Uploaded ${images.size} image(s)", Toast.LENGTH_LONG).show()
                         btnUpload.isEnabled = true
                         btnPick.isEnabled = true
                     },
@@ -97,11 +95,10 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 return@setOnClickListener
             }
 
-            // prepare map (include images if uploaded)
             val user = hashMapOf(
                 "username" to username,
                 "age" to age,
-                "images" to uploadedImageUrls.toList() // may be empty
+                "images" to uploadedImages // contains url + public_id
             )
 
             db.collection("users")
@@ -111,7 +108,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     etUsername.text?.clear()
                     etAge.text?.clear()
                     selectedImageUris.clear()
-                    uploadedImageUrls.clear()
+                    uploadedImages.clear()
                     updateSelectedUI()
                 }
                 .addOnFailureListener { e ->
@@ -120,7 +117,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         }
     }
 
-    // UI helpers (store these to avoid passing as params)
     private var _tvImagesCount: TextView? = null
     private var _llImages: LinearLayout? = null
 
@@ -142,14 +138,13 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         }
     }
 
-    // Upload images sequentially on IO dispatcher, return list of secure URLs on success
     private suspend fun uploadSelectedImages(
-        onComplete: (List<String>) -> Unit,
+        onComplete: (List<Map<String, String>>) -> Unit,
         onError: (String) -> Unit
     ) {
         withContext(Dispatchers.IO) {
             val client = OkHttpClient()
-            val uploaded = mutableListOf<String>()
+            val uploaded = mutableListOf<Map<String, String>>()
 
             try {
                 for ((index, uri) in selectedImageUris.withIndex()) {
@@ -179,8 +174,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
                     val json = JSONObject(responseBody)
                     val url = json.optString("url", "")
-                    if (url.isBlank()) throw Exception("No URL in response")
-                    uploaded.add(url)
+                    val publicId = json.optString("public_id", "")
+                    if (url.isBlank() || publicId.isBlank()) throw Exception("Missing url or public_id")
+                    uploaded.add(mapOf("url" to url, "public_id" to publicId))
                 }
 
                 withContext(Dispatchers.Main) { onComplete(uploaded) }
@@ -189,5 +185,4 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
         }
     }
-
 }
