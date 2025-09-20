@@ -36,7 +36,7 @@
             android:layout_marginTop="12dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Pick Images (max 5)" />
+            android:text="Pick Images (max 10)" />
 
         <TextView
             android:id="@+id/tv_images_count"
@@ -57,20 +57,20 @@
         </HorizontalScrollView>
 
         <!-- NEW: Upload images to Cloudinary -->
-        <Button
-            android:id="@+id/btn_upload_images"
-            android:layout_marginTop="12dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Upload Images" />
+<!--        <Button-->
+<!--            android:id="@+id/btn_upload_images"-->
+<!--            android:layout_marginTop="12dp"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="Upload Images" />-->
 
-        <!-- Keep existing Save button (saves Firestore doc) -->
+        <!-- Save button: uploads images first, then saves details -->
         <Button
             android:id="@+id/btn_save"
             android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Save" />
+            android:text="Save (uploads then save)" />
 
     </LinearLayout>
 </ScrollView>
