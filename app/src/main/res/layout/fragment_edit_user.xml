@@ -1,34 +1,145 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scrollView_edit"
     android:padding="16dp"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <EditText
-        android:id="@+id/et_edit_name"
-        android:hint="Username"
+    <LinearLayout
+        android:orientation="vertical"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content">
 
-    <EditText
-        android:id="@+id/et_edit_age"
-        android:hint="Age"
-        android:inputType="number"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"/>
+        <!-- Title -->
+        <EditText
+            android:id="@+id/et_edit_title"
+            android:hint="Event Title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
-    <Button
-        android:id="@+id/btn_update"
-        android:text="Update"
-        android:layout_marginTop="16dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+        <!-- Event Type spinner -->
+        <TextView
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Type" />
+        <Spinner
+            android:id="@+id/spinner_edit_event_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
-    <Button
-        android:id="@+id/btn_delete"
-        android:text="Delete"
-        android:layout_marginTop="12dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
-</LinearLayout>
+        <!-- Descriptions (show all so user can edit any) -->
+        <TextView android:layout_marginTop="12dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (primary)" />
+        <EditText
+            android:id="@+id/et_edit_description_primary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Primary description" />
+
+        <TextView android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (secondary)" />
+        <EditText
+            android:id="@+id/et_edit_description_secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Secondary description" />
+
+        <TextView android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (tertiary)" />
+        <EditText
+            android:id="@+id/et_edit_description_tertiary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Tertiary description" />
+
+        <!-- Date & Time -->
+        <LinearLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2">
+            <TextView
+                android:id="@+id/tv_edit_date"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="Select date"/>
+
+            <TextView
+                android:id="@+id/tv_edit_time"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="Select time"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Duration -->
+        <EditText
+            android:id="@+id/et_edit_duration"
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:hint="Duration (minutes)" />
+
+        <!-- Location -->
+        <EditText
+            android:id="@+id/et_edit_location"
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Location (address/venue)" />
+
+        <!-- Upcoming switch -->
+        <LinearLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Is Upcoming?" />
+            <Switch
+                android:id="@+id/switch_edit_upcoming"
+                android:layout_marginStart="12dp"
+                android:checked="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- image pick + count -->
+        <Button
+            android:id="@+id/btn_pick_more_images"
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Images" />
+
+        <TextView
+            android:id="@+id/tv_edit_images_count"
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No images" />
+
+        <HorizontalScrollView
+            android:layout_marginTop="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="160dp">
+            <LinearLayout
+                android:id="@+id/ll_edit_images"
+                android:orientation="horizontal"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"/>
+        </HorizontalScrollView>
+
+        <Button
+            android:id="@+id/btn_update"
+            android:text="Update"
+            android:layout_marginTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+</ScrollView>

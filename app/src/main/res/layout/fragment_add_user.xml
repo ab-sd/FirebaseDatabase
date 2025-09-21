@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scrollView"
+    android:clipToPadding="false"
+    android:fillViewport="true"
     android:padding="16dp"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -9,28 +12,149 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <!-- Title -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_username"
-                android:hint="Username"
+                android:id="@+id/et_title"
+                android:hint="Event Title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Event Type (Spinner) -->
+        <TextView
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Type" />
+        <Spinner
+            android:id="@+id/spinner_event_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <!-- Descriptions in up to 3 languages (only one shown based on prefs) -->
+        <TextView
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Description (primary)" />
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_description_primary"
+                android:hint="Description (primary)"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Description (secondary)" />
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_description_secondary"
+                android:hint="Description (secondary)"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_marginTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Description (tertiary)" />
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_description_tertiary"
+                android:hint="Description (tertiary)"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Date and Time -->
+        <LinearLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2">
+
+            <TextView
+                android:id="@+id/tv_event_date"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="Select date"
+                android:background="?android:attr/selectableItemBackground"
+                />
+
+            <TextView
+                android:id="@+id/tv_event_time"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="Select time"
+                android:layout_marginStart="8dp"
+                android:background="?android:attr/selectableItemBackground"
+                />
+        </LinearLayout>
+
+        <!-- Duration -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_marginTop="12dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_age"
+                android:id="@+id/et_duration"
                 android:inputType="number"
-                android:hint="Age"
+                android:hint="Duration (minutes)"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Location -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_location"
+                android:hint="Location (address, venue)"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Upcoming / Completed -->
+        <LinearLayout
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Is Upcoming?" />
+            <Switch
+                android:id="@+id/switch_upcoming"
+                android:layout_marginStart="12dp"
+                android:checked="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- image picker -->
         <Button
             android:id="@+id/btn_pick_images"
             android:layout_marginTop="12dp"
@@ -48,29 +172,26 @@
         <HorizontalScrollView
             android:layout_marginTop="8dp"
             android:layout_width="match_parent"
-            android:layout_height="100dp">
+            android:layout_height="wrap_content">
             <LinearLayout
                 android:id="@+id/ll_selected_images"
                 android:orientation="horizontal"
                 android:layout_width="wrap_content"
-                android:layout_height="match_parent"/>
+                android:layout_height="wrap_content"/>
         </HorizontalScrollView>
 
-        <!-- NEW: Upload images to Cloudinary -->
-<!--        <Button-->
-<!--            android:id="@+id/btn_upload_images"-->
-<!--            android:layout_marginTop="12dp"-->
-<!--            android:layout_width="wrap_content"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:text="Upload Images" />-->
-
-        <!-- Save button: uploads images first, then saves details -->
+        <!-- Save button -->
         <Button
             android:id="@+id/btn_save"
             android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Save (uploads then save)" />
+
+        <!-- Bottom spacer to ensure some extra room under content (helps on devices with tall nav areas) -->
+<!--        <View-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="56dp" />-->
 
     </LinearLayout>
 </ScrollView>

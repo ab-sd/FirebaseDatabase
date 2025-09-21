@@ -1,16 +1,18 @@
 package com.example.basicfiredatabase.adapters
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.basicfiredatabase.R
+import com.example.basicfiredatabase.databinding.ItemUserBinding
 import com.example.basicfiredatabase.models.User
+import com.example.basicfiredatabase.fragments.ImageViewerFragment
 
 class UserAdapter(
     private val items: MutableList<User> = mutableListOf(),
@@ -18,62 +20,89 @@ class UserAdapter(
     private val onDelete: (User) -> Unit
 ) : RecyclerView.Adapter<UserAdapter.VH>() {
 
-    class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val tvName: TextView = itemView.findViewById(R.id.tv_name)
-        val ivExpand: ImageView = itemView.findViewById(R.id.iv_expand)
-        val llDetails: LinearLayout = itemView.findViewById(R.id.ll_details)
-        val tvAge: TextView = itemView.findViewById(R.id.tv_age)
-        val llImages: LinearLayout = itemView.findViewById(R.id.ll_images)
-
-        // new buttons for edit & delete
-        val btnEdit: Button = itemView.findViewById(R.id.btn_edit)
-        val btnDelete: Button = itemView.findViewById(R.id.btn_delete)
-    }
+    class VH(val binding: ItemUserBinding) : RecyclerView.ViewHolder(binding.root)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val v = LayoutInflater.from(parent.context).inflate(R.layout.item_user, parent, false)
-        return VH(v)
+        val binding = ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return VH(binding)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val user = items[position]
-        holder.tvName.text = user.username
-        holder.tvAge.text = "Age: ${user.age ?: "N/A"}"
+        val b = holder.binding
+        val ctx = holder.itemView.context
 
-        // expand/collapse UI
-        holder.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
-        holder.ivExpand.rotation = if (user.expanded) 180f else 0f
+        // Title
+        b.tvName.text = user.title
 
-        // populate images
-        holder.llImages.removeAllViews()
+        // Preferred language for description
+        val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
+        val descToShow = user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
+
+        // Meta fields
+        val status = if (user.isUpcoming) "Upcoming" else "Completed"
+        val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
+        val locationText = user.location ?: "N/A"
+        val dateTime = listOf(user.date, user.time).filter { it.isNotBlank() }.joinToString(" ")
+
+        // COLLAPSED summary: description + date/time (always visible under title)
+        b.tvSummary.text = if (descToShow.isNotBlank()) "$descToShow\n$dateTime" else (dateTime.ifBlank { "No date/time set" })
+
+        // EXPANDED details: Type, Location, Duration, Status
+        b.tvDetails.text = buildString {
+            append("Type: ${user.eventType}\n")
+            append("Location: $locationText\n")
+            append("Duration: $durationText\n")
+            append("Status: $status")
+        }
+
+        // Expand/collapse UI
+        b.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
+        b.ivExpand.rotation = if (user.expanded) 180f else 0f
+
+        // Images (only shown when expanded)
+        b.llImages.removeAllViews()
         if (user.expanded && user.images.isNotEmpty()) {
-            val ctx = holder.itemView.context
-            val sizePx = (ctx.resources.displayMetrics.density * 80).toInt()
+            val sizePx = (ctx.resources.displayMetrics.density * 200).toInt()
             val margin = (ctx.resources.displayMetrics.density * 6).toInt()
 
-            for (img in user.images) {
+            for ((index, img) in user.images.withIndex()) {
                 val iv = ImageView(ctx)
                 val lp = LinearLayout.LayoutParams(sizePx, sizePx)
                 lp.setMargins(margin, margin, margin, margin)
                 iv.layoutParams = lp
-                iv.scaleType = ImageView.ScaleType.CENTER_CROP
+                iv.scaleType = ImageView.ScaleType.FIT_CENTER
+                iv.adjustViewBounds = true
+
                 Glide.with(ctx).load(img.url).into(iv)
-                holder.llImages.addView(iv)
+
+                iv.setOnClickListener {
+                    val fragment = ImageViewerFragment.newInstance(
+                        user.images.map { it.url }, index
+                    )
+                    val activity = ctx as AppCompatActivity
+                    activity.supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, fragment)
+                        .addToBackStack(null)
+                        .commit()
+                }
+
+                b.llImages.addView(iv)
             }
         }
 
-
-        // expand/collapse on row click
-        holder.itemView.setOnClickListener {
+        // Toggle expand/collapse when row is clicked
+        b.root.setOnClickListener {
             user.expanded = !user.expanded
-            holder.ivExpand.animate().rotation(if (user.expanded) 180f else 0f).setDuration(150).start()
-            holder.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
+            // animate arrow then rebind to refresh content
+            b.ivExpand.animate().rotation(if (user.expanded) 180f else 0f).setDuration(150).start()
             notifyItemChanged(position)
         }
 
-        // edit/delete button actions
-        holder.btnEdit.setOnClickListener { onEdit(user) }
-        holder.btnDelete.setOnClickListener { onDelete(user) }
+        // Edit / Delete callbacks
+        b.btnEdit.setOnClickListener { onEdit(user) }
+        b.btnDelete.setOnClickListener { onDelete(user) }
     }
 
     override fun getItemCount(): Int = items.size

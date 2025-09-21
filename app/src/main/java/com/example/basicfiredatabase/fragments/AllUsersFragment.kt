@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -32,28 +34,31 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
     private var deleteImage_url: String? = null
 
-
     private val adapter = UserAdapter(
         onEdit = { user ->
             val fragment = EditUserFragment().apply {
                 arguments = Bundle().apply {
                     putString("id", user.id)
-                    putString("username", user.username)
-                    putInt("age", user.age ?: 0)
-                    // ✅ also pass images
+                    putString("title", user.title)
+                    putString("event_type", user.eventType)
+                    putSerializable("descriptions", HashMap(user.descriptions))
+                    putString("date", user.date)
+                    putString("time", user.time)
                     putSerializable(
                         "images",
                         ArrayList(user.images.map { mapOf("url" to it.url, "public_id" to it.public_id) })
                     )
+                    putInt("duration_minutes", user.durationMinutes ?: 0)
+                    putString("location", user.location)
+                    putBoolean("is_upcoming", user.isUpcoming)
                 }
             }
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, fragment) // your container id
+                .replace(R.id.fragment_container, fragment)
                 .addToBackStack(null)
                 .commit()
         },
         onDelete = { user ->
-            // ✅ launch coroutine for Cloudinary deletion
             lifecycleScope.launch {
                 val success = deleteImagesFromCloudinary(user.images)
                 if (!success) {
@@ -63,7 +68,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                 db.collection("users").document(user.id)
                     .delete()
                     .addOnSuccessListener {
-                        Toast.makeText(requireContext(), "Deleted ${user.username}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Deleted ${user.title}", Toast.LENGTH_SHORT).show()
                     }
                     .addOnFailureListener { e ->
                         Log.w("AllUsersFragment", "Error deleting", e)
@@ -80,14 +85,21 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         rv.adapter = adapter
 
 
-        // --- Remote Config setup for deleteImage_url ---
+        // Adjust RecyclerView bottom padding for nav bar dynamically
+        ViewCompat.setOnApplyWindowInsetsListener(rv) { v, insets ->
+            val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + dpToPx(8))
+            insets
+        }
+
+
+        // Remote Config setup for deleteImage_url
         val remoteConfig = Firebase.remoteConfig
         val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600 // always fetch fresh for testing
+            minimumFetchIntervalInSeconds = 3600
         }
         remoteConfig.setConfigSettingsAsync(configSettings)
 
-        // as a fallback if Remote Config fails
         remoteConfig.setDefaultsAsync(
             mapOf("deleteImage_url" to "https://cloudinaryserver.onrender.com/delete")
         )
@@ -96,22 +108,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     deleteImage_url = remoteConfig.getString("deleteImage_url")
-                    Toast.makeText(
-                        requireContext(),
-                        "Fetched delete URL: $deleteImage_url",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    Toast.makeText(
-                        requireContext(),
-                        "Failed to fetch delete URL from Remote Config",
-                        Toast.LENGTH_SHORT
-                    ).show()
                 }
             }
 
-
-        // realtime listener - keeps UI updated
         db.collection("users")
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
@@ -122,8 +121,20 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
                 val list = snapshots.documents.map { doc ->
                     val id = doc.id
-                    val username = doc.getString("username") ?: "No name"
-                    val age = doc.getLong("age")?.toInt()
+                    // NEW fields (events)
+                    val title = doc.getString("title") ?: "No title"
+                    val eventType = doc.getString("event_type") ?: "Other"
+                    val descriptions = (doc.get("descriptions") as? Map<*, *>)?.mapNotNull { entry ->
+                        val k = entry.key as? String
+                        val v = entry.value as? String
+                        if (k != null && v != null) k to v else null
+                    }?.toMap() ?: emptyMap()
+
+                    val date = doc.getString("date") ?: ""
+                    val time = doc.getString("time") ?: ""
+                    val duration = doc.getLong("duration_minutes")?.toInt()
+                    val location = doc.getString("location")
+                    val isUpcoming = doc.getBoolean("is_upcoming") ?: true
 
                     val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
                         val map = item as? Map<*, *>
@@ -134,13 +145,28 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         } else null
                     } ?: emptyList()
 
-                    User(id = id, username = username, age = age, images = images)
+                    User(
+                        id = id,
+                        title = title,
+                        eventType = eventType,
+                        descriptions = descriptions,
+                        date = date,
+                        time = time,
+                        durationMinutes = duration,
+                        images = images,
+                        location = location,
+                        isUpcoming = isUpcoming
+                    )
                 }
                 adapter.setItems(list)
             }
     }
 
-    // ✅ helper function to delete from Cloudinary
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    // delete helper
     private suspend fun deleteImagesFromCloudinary(images: List<UserImage>): Boolean {
         if (images.isEmpty()) return true
         return withContext(Dispatchers.IO) {
