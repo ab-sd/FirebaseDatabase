@@ -16,6 +16,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.basicfiredatabase.R
+import com.example.basicfiredatabase.utils.ImageCompressionUtil.loadThumbnail
+import com.example.basicfiredatabase.utils.ImageCompressionUtil.maybeCompressIfNeeded
+import com.example.basicfiredatabase.utils.ImageUploadService
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.remoteconfig.ktx.remoteConfig
@@ -428,7 +431,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             val ivLp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             iv.layoutParams = ivLp
             iv.scaleType = ImageView.ScaleType.CENTER_CROP
-            iv.setImageURI(uri)
+            iv.setImageBitmap(loadThumbnail(requireContext(), uri, 512))
 
             // small delete button for removing selection (not server delete)
             val deleteBtn = ImageButton(requireContext())
@@ -466,84 +469,34 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
     // Upload only the new local images and return list of maps { "url":..., "public_id":... }
     private suspend fun uploadNewImages(uris: List<Uri>): List<Map<String, String>> {
-        return withContext(Dispatchers.IO) {
-            val result = mutableListOf<Map<String, String>>()
-            val client = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
+        // quick-return if nothing to upload
+        if (uris.isEmpty()) return emptyList()
 
-            try {
-                for ((index, uri) in uris.withIndex()) {
-                    val key = "new:$index"
-                    // show spinner for this new image
-                    withContext(Dispatchers.Main) {
-                        progressMap[key]?.visibility = View.VISIBLE
-                    }
+        // ensure we have the upload URL & api key (caller already checks, but be defensive)
+        val url = uploadUrl ?: throw Exception("Upload URL not available")
+        val apiKey = imageCloudApiKey ?: throw Exception("Image API key not available")
 
-                    val input: InputStream = requireContext().contentResolver.openInputStream(uri)
-                        ?: throw Exception("Cannot open selected image")
-                    val rawBytes = input.readBytes()
-                    input.close()
+        // Build stable keys that match this fragment's progressMap keys ("new:<index>")
+        val pairs = uris.mapIndexed { idx, uri -> "new:$idx" to uri }
 
-                    val bytesToUpload = maybeCompressIfNeeded(rawBytes)
-
-                    val mediaType = "image/*".toMediaTypeOrNull()
-                    val fileBody = bytesToUpload.toRequestBody(mediaType)
-
-                    val requestBody = MultipartBody.Builder()
-                        .setType(MultipartBody.FORM)
-                        .addFormDataPart("file", "upload_$index.jpg", fileBody)
-                        .build()
-
-                    val request = Request.Builder()
-                        .url(uploadUrl!!)
-                        .post(requestBody)
-                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
-                        .build()
-
-                    val response = client.newCall(request).execute()
-                    val responseBody = response.body?.string()
-                    if (!response.isSuccessful || responseBody.isNullOrEmpty()) {
-                        withContext(Dispatchers.Main) {
-                            progressMap[key]?.visibility = View.GONE
-                        }
-                        throw Exception("HTTP ${response.code}: ${responseBody ?: "empty response"}")
-                    }
-
-                    val json = JSONObject(responseBody)
-                    val url = json.optString("url", "")
-                    val publicId = json.optString("public_id", "")
-                    if (url.isBlank() || publicId.isBlank()) {
-                        withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.GONE }
-                        throw Exception("Missing url or public_id")
-                    }
-
-                    result.add(mapOf("url" to url, "public_id" to publicId))
-
-                    withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.GONE }
-                }
-
-                // after successful upload, clear local newImageUris (we'll handle UI separately after returning)
-                withContext(Dispatchers.Main) {
-                    // we won't mutate newImageUris here because caller manages final assignment
-                }
-
-                result
-            } catch (e: Exception) {
-                // hide any spinners
-                withContext(Dispatchers.Main) {
-                    progressMap.values.forEach { it.visibility = View.GONE }
-                }
-                throw e
+        // Delegate to the service. The service will call onProgress on the main thread.
+        return ImageUploadService.uploadUris(
+            requireContext(),
+            pairs,
+            url,
+            apiKey,
+            onProgress = { key, visible ->
+                // This fragment stores progress bars with keys like "new:<index>"
+                progressMap[key]?.visibility = if (visible) View.VISIBLE else View.GONE
             }
-        }
+        )
     }
+
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }
+
 
     // Delete the public_ids passed (calls the deleteUrl endpoint). Returns true if all deletions succeeded.
     private suspend fun deleteMarkedImages(publicIds: List<String>): Boolean {
@@ -582,37 +535,6 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         }
     }
 
-    /**
-     * Same compression logic as AddUserFragment:
-     * - If bytes > 2MB or max dimension >1080 => scale down to max 1080 and compress JPEG 85%
-     * - Otherwise return original bytes
-     */
-    private fun maybeCompressIfNeeded(bytes: ByteArray): ByteArray {
-        try {
-            val sizeInBytes = bytes.size
-            val twoMB = 2 * 1024 * 1024
-            if (sizeInBytes <= twoMB) {
-                val opts = BitmapFactory.Options()
-                opts.inJustDecodeBounds = true
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-                val maxDim = maxOf(opts.outWidth, opts.outHeight)
-                if (maxDim <= 1080) return bytes
-            }
 
-            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
-            val maxDim = maxOf(bmp.width, bmp.height)
-            if (maxDim <= 1080 && sizeInBytes <= twoMB) return bytes
 
-            val scale = 1080f / maxDim
-            val newW = (bmp.width * scale).toInt()
-            val newH = (bmp.height * scale).toInt()
-            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, newW, newH, true)
-
-            val baos = ByteArrayOutputStream()
-            scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
-            return baos.toByteArray()
-        } catch (e: Exception) {
-            return bytes
-        }
-    }
 }
