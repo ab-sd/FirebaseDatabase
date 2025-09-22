@@ -2,6 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+
+    <queries>
+        <!-- Let the system know we will try to talk to the Google Translate app by package name -->
+        <package android:name="com.google.android.apps.translate" />
+
+        <!-- Let the system know we'll open VIEW intents (browsers) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

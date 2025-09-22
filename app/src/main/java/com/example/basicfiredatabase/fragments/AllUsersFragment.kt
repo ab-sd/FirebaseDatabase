@@ -32,7 +32,10 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     private val db = Firebase.firestore
     private lateinit var rv: RecyclerView
 
+    //Firebase remote config
     private var deleteImage_url: String? = null
+    private var imageCloudApiKey: String? = null
+
 
     private val adapter = UserAdapter(
         onEdit = { user ->
@@ -108,6 +111,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     deleteImage_url = remoteConfig.getString("deleteImage_url")
+                    imageCloudApiKey = remoteConfig.getString("cloud_api_key")
                 }
             }
 
@@ -179,6 +183,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     val request = Request.Builder()
                         .url(deleteImage_url!!)
                         .post(body)
+                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
                         .build()
 
                     val response = client.newCall(request).execute()

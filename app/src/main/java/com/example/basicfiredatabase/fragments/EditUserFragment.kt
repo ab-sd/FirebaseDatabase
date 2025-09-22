@@ -47,6 +47,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     // public_ids that user chose to delete (these will be sent to delete endpoint on Update)
     private val imagesToDelete = mutableListOf<String>()
 
+    //firebase remote config values
+    private var imageCloudApiKey: String? = null
     private var uploadUrl: String? = null
     private var deleteUrl: String? = null
 
@@ -213,6 +215,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 if (task.isSuccessful) {
                     uploadUrl = remoteConfig.getString("uploadImage_url")
                     deleteUrl = remoteConfig.getString("deleteImage_url")
+                    imageCloudApiKey = remoteConfig.getString("cloud_api_key")
                     Toast.makeText(requireContext(), "RC: upload and delete URLs loaded", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
@@ -497,6 +500,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     val request = Request.Builder()
                         .url(uploadUrl!!)
                         .post(requestBody)
+                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
                         .build()
 
                     val response = client.newCall(request).execute()
@@ -561,6 +565,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     val request = Request.Builder()
                         .url(deleteUrl!!)
                         .post(body)
+                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
                         .build()
 
                     val response = client.newCall(request).execute()

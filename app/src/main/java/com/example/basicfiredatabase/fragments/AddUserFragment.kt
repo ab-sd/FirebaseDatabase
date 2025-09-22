@@ -2,11 +2,16 @@ package com.example.basicfiredatabase.fragments
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +29,10 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.remoteconfig.ktx.remoteConfig
 import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -54,7 +63,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     private val selectedImageUris = mutableListOf<Uri>()
     private val uploadedImages = mutableListOf<Map<String, String>>() // url + public_id
 
+    //firebase remote config
     private var imageUploadUrl: String? = null
+    private var imageCloudApiKey: String? = null
+    // Hard-coded header (replace with your real key)
+    private var apiKeyForTranslate: String? = null
+    // endpoints
+    private var zuluUrl: String? = null
+    private var afrikaansUrl: String? = null
 
     // maps image index -> progress spinner view (to show/hide while uploading)
     //lets user know which image is being uploaded as this could take several moments depending on size of image
@@ -72,9 +88,48 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             updateSelectedUI()
         }
 
+
+
+    // --- TRANSLATION RELATED ---
+    private var translationJob: Job? = null
+    private val translateClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+
+
+
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentAddUserBinding.bind(view)
+
+
+        // Remote Config setup
+        val remoteConfig = Firebase.remoteConfig
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 3600
+        }
+        remoteConfig.setConfigSettingsAsync(configSettings)
+        remoteConfig.setDefaultsAsync(
+            mapOf("uploadImage_url" to "https://cloudinaryserver.onrender.com/upload",
+                "zuluUrl" to "https://mymemoryserver.onrender.com/translate/zu",
+                "afrikaansUrl" to "https://mymemoryserver.onrender.com/translate/af"
+            )
+        )
+        remoteConfig.fetchAndActivate()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    imageUploadUrl = remoteConfig.getString("uploadImage_url")
+                    imageCloudApiKey = remoteConfig.getString("cloud_api_key")
+
+                    zuluUrl = remoteConfig.getString("translate_zulu_url")
+                } else {
+                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
+                }
+            }
 
         // Vars to track IME + nav bar sizes
         var lastImeHeight = 0
@@ -190,30 +245,81 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         spinnerType.adapter =
             ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
 
-        // Description inputs by language preference
-        val prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
-        etDescPrimary.visibility = if (preferredLang == "primary") View.VISIBLE else View.GONE
-        etDescSecondary.visibility = if (preferredLang == "secondary") View.VISIBLE else View.GONE
-        etDescTertiary.visibility = if (preferredLang == "tertiary") View.VISIBLE else View.GONE
+        // ALWAYS show all three description fields (user requested)
+        etDescPrimary.visibility = View.VISIBLE
+        etDescSecondary.visibility = View.VISIBLE
+        etDescTertiary.visibility = View.VISIBLE
 
-        // Remote Config setup
-        val remoteConfig = Firebase.remoteConfig
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600
-        }
-        remoteConfig.setConfigSettingsAsync(configSettings)
-        remoteConfig.setDefaultsAsync(
-            mapOf("uploadImage_url" to "https://cloudinaryserver.onrender.com/upload")
-        )
-        remoteConfig.fetchAndActivate()
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    imageUploadUrl = remoteConfig.getString("uploadImage_url")
-                } else {
-                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
+
+        // TextWatcher + debounce:
+        // -> 3 seconds after typing stops, send `{"text": originalText}` to the two endpoints
+        // -> fill secondary = Zulu, tertiary = Afrikaans
+        // -----------------------
+        etDescPrimary.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                // cancel previous pending translate job
+                translationJob?.cancel()
+
+                val currentText = s?.toString() ?: ""
+
+                // don't start a job for empty text; clear translations instead
+                if (currentText.trim().isEmpty()) {
+                    etDescSecondary.setText("")
+                    etDescTertiary.setText("")
+                    return
+                }
+
+                // start a new job with debounce
+                translationJob = lifecycleScope.launch {
+                    try {
+                        delay(3000) // 3 seconds of inactivity
+
+                        // Kick off both translations concurrently
+                        val zuluDeferred = async(Dispatchers.IO) {
+                            translateText(currentText, zuluUrl!!, apiKeyForTranslate!!)
+                        }
+                        val afDeferred = async(Dispatchers.IO) {
+                            translateText(currentText, afrikaansUrl!!, apiKeyForTranslate!!)
+                        }
+
+                        val zuluResult = zuluDeferred.await()
+                        val afResult = afDeferred.await()
+
+                        withContext(Dispatchers.Main) {
+                            // Only set if non-null (preserve potential manual edits otherwise)
+                            if (zuluResult != null) etDescSecondary.setText(zuluResult)
+                            if (afResult != null) etDescTertiary.setText(afResult)
+                        }
+                    } catch (ex: Exception) {
+                        // If cancelled or failed, ignore here (optionally log)
+                    }
                 }
             }
+
+            override fun afterTextChanged(s: Editable?) {}
+
+        })
+
+
+        // find the verify links (if you used viewBinding and these ids are in the layout,
+// binding will have direct references only if you included them in the layout file used by the binding).
+// Using root.findViewById keeps it simple:
+        val tvVerifySecondary = requireView().findViewById<TextView>(R.id.tv_verify_secondary)
+        val tvVerifyTertiary = requireView().findViewById<TextView>(R.id.tv_verify_tertiary)
+
+// set click listeners that open Google Translate using the PRIMARY text as source
+        tvVerifySecondary.setOnClickListener {
+            openGoogleTranslateFromPrimary("zu") // verify secondary = Zulu
+        }
+
+        tvVerifyTertiary.setOnClickListener {
+            openGoogleTranslateFromPrimary("af") // verify tertiary = Afrikaans
+        }
+
+
+
+
 
         // Date picker
         tvDate.setOnClickListener {
@@ -323,6 +429,101 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
         }
     }
+
+
+
+    /**
+     * Calls the translation endpoint with JSON body {"text": originalText} and returns a string
+     * containing the translated text or null if translation failed.
+     *
+     * This function attempts to read common JSON keys that might contain the translated text.
+     */
+    private fun translateText(originalText: String, url: String, apiKey: String): String? {
+        return try {
+            val jsonBody = JSONObject().put("text", originalText).toString()
+            val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+
+            val request = Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .addHeader("x-api-key", apiKey)
+                .build()
+
+            val response = translateClient.newCall(request).execute()
+            val body = response.body?.string() ?: return null
+            if (!response.isSuccessful) return null
+
+            // Try several possible keys the server might return
+            try {
+                val j = JSONObject(body)
+                val candidates = listOf("translation", "translatedText", "translated", "result", "text", "data")
+                for (k in candidates) {
+                    val v = j.optString(k, "")
+                    if (v.isNotBlank()) return v
+                }
+                // If server dumped nested object e.g. { data: { translated: "..." } }, try to search a bit:
+                for (key in j.keys()) {
+                    val valObj = j.opt(key)
+                    if (valObj is JSONObject) {
+                        for (k in candidates) {
+                            val v2 = (valObj as JSONObject).optString(k, "")
+                            if (v2.isNotBlank()) return v2
+                        }
+                    }
+                }
+            } catch (_: Exception) { /* not JSON or unexpected shape */ }
+
+            // Fallback: return raw body if not empty
+            if (body.isNotBlank()) body else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+
+    private fun openGoogleTranslateFromPrimary(targetLang: String) {
+        val originalText = binding.etDescriptionPrimary.text?.toString()?.trim().orEmpty()
+        if (originalText.isBlank()) {
+            Toast.makeText(requireContext(), "Enter text in primary box to verify", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val encodedText = Uri.encode(originalText)
+
+        // 1) Try to open Google Translate app via ACTION_SEND
+        val translatePackage = "com.google.android.apps.translate"
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, originalText)
+            `package` = translatePackage // target Google Translate specifically
+        }
+
+        try {
+            // resolveActivity can be affected by package visibility on Android 11+
+            if (sendIntent.resolveActivity(requireActivity().packageManager) != null) {
+                startActivity(sendIntent)
+                return
+            } else {
+                Log.d("AddUserFragment", "Translate app not installed or not visible to package queries")
+            }
+        } catch (e: Exception) {
+            Log.e("AddUserFragment", "Error while trying to open Translate app", e)
+            // continue to fallback
+        }
+
+        // 2) Fallback: open Translate web with prefilled text (opens browser or any handler)
+        val webUrl = "https://translate.google.com/?sl=auto&tl=$targetLang&text=$encodedText&op=translate"
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
+        val chooser = Intent.createChooser(browserIntent, "Open translation with")
+
+        try {
+            startActivity(chooser)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("AddUserFragment", "No app found to open translation URL", e)
+            Toast.makeText(requireContext(), "No app available to open translation", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 
 
 
@@ -514,6 +715,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     val request = Request.Builder()
                         .url(imageUploadUrl!!) // use Remote Config value (checked earlier)
                         .post(requestBody)
+                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
                         .build()
 
                     val response = client.newCall(request).execute()
@@ -598,6 +800,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        translationJob?.cancel()
     }
 
 

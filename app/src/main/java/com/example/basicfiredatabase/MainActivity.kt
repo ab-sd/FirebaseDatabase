@@ -1,10 +1,15 @@
 package com.example.basicfiredatabase
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.MenuItem
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
@@ -37,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         setContentView(R.layout.activity_main)
-
+        
         drawerLayout = findViewById(R.id.drawer_layout)
         val appBarLayout = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.appBarLayout)
         val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
@@ -101,6 +106,10 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
+
+
+
+
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -108,4 +117,44 @@ class MainActivity : AppCompatActivity() {
             .onOptionsItemSelected(item)
         return handled || super.onOptionsItemSelected(item)
     }
+
+    // 🔵 New function to open Google Translate
+    private fun openGoogleTranslate() {
+        val originalText = "Hey, how are you doing? I am translating live using a redirect URL"
+        val encodedText = Uri.encode(originalText)
+
+        // --- 1) Try to open Google Translate app via ACTION_SEND ---
+        val translatePackage = "com.google.android.apps.translate"
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, originalText)
+            setPackage(translatePackage) // target Google Translate specifically
+        }
+
+        try {
+            // resolveActivity can be affected by package visibility on Android 11+
+            if (sendIntent.resolveActivity(packageManager) != null) {
+                startActivity(sendIntent)
+                return
+            } else {
+                Log.d("MainActivity", "Translate app not installed or not visible to package queries")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error while trying to open Translate app", e)
+            // continue to fallback
+        }
+
+        // --- 2) Fallback: open Translate web with prefilled text (opens browser or any handler) ---
+        val webUrl = "https://translate.google.com/?sl=auto&tl=af&text=$encodedText&op=translate"
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
+        val chooser = Intent.createChooser(browserIntent, "Open translation with")
+
+        try {
+            startActivity(chooser)
+        } catch (e: ActivityNotFoundException) {
+            Log.e("MainActivity", "No app found to open translation URL", e)
+            Toast.makeText(this, "No app available to open translation", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 }
