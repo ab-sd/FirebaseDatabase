@@ -46,6 +46,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 
 class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
@@ -106,31 +107,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentAddUserBinding.bind(view)
 
-
-        // Remote Config setup
-        val remoteConfig = Firebase.remoteConfig
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600
-        }
-        remoteConfig.setConfigSettingsAsync(configSettings)
-        remoteConfig.setDefaultsAsync(
-            mapOf("uploadImage_url" to "https://cloudinaryserver.onrender.com/upload",
-                "zuluUrl" to "https://mymemoryserver.onrender.com/translate/zu",
-                "afrikaansUrl" to "https://mymemoryserver.onrender.com/translate/af"
-            )
-        )
-        remoteConfig.fetchAndActivate()
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    imageUploadUrl = remoteConfig.getString("uploadImage_url")
-                    imageCloudApiKey = remoteConfig.getString("cloud_api_key")
-
-                    zuluUrl = remoteConfig.getString("translate_zulu_url")
-                } else {
-                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
-                }
-            }
-
         // Vars to track IME + nav bar sizes
         var lastImeHeight = 0
         var lastNavHeight = 0
@@ -168,6 +144,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         val etDescPrimary = binding.etDescriptionPrimary
         val etDescSecondary = binding.etDescriptionSecondary
         val etDescTertiary = binding.etDescriptionTertiary
+        val btnPasteSecondary = binding.btnPasteSecondary
+        val btnPasteTertiary = binding.btnPasteTertiary
         val tvDate = binding.tvEventDate
         val tvTime = binding.tvEventTime
         val etDuration = binding.etDuration
@@ -178,8 +156,21 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         val tvImagesCount = binding.tvImagesCount
         val llImages = binding.llSelectedImages
 
+        val pbSecondary = binding.pbSecondaryTranslate
+        val pbTertiary = binding.pbTertiaryTranslate
+
+
         _tvImagesCount = tvImagesCount
         _llImages = llImages
+
+
+        btnPasteSecondary.setOnClickListener {
+            pasteFromClipboard(binding.etDescriptionSecondary)
+        }
+
+        btnPasteTertiary.setOnClickListener {
+            pasteFromClipboard(binding.etDescriptionTertiary)
+        }
 
         // Focus listeners for bottom fields
         val focusableFields = listOf(
@@ -271,30 +262,81 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 }
 
                 // start a new job with debounce
+                // inside onTextChanged where you currently set translationJob = lifecycleScope.launch { ... }
                 translationJob = lifecycleScope.launch {
                     try {
-                        delay(3000) // 3 seconds of inactivity
+                        delay(3000) // debounce
 
-                        // Kick off both translations concurrently
+                        val currentZuluUrl = zuluUrl
+                        val currentAfrUrl = afrikaansUrl
+                        val currentApiKey = apiKeyForTranslate
+
+                        // ensure endpoints exist
+                        if (currentZuluUrl.isNullOrBlank() || currentAfrUrl.isNullOrBlank()) {
+                            Log.w("AddUserFragment", "Translation endpoints not configured — skipping auto-translate")
+                            return@launch
+                        }
+
+                        // API key is required by your backend; if missing, stop and warn
+                        if (currentApiKey.isNullOrBlank()) {
+                            Log.w("AddUserFragment", "Translate API key missing — cannot proceed with automatic translations")
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(requireContext(), "Translate API key missing (check Remote Config)", Toast.LENGTH_SHORT).show()
+                            }
+                            return@launch
+                        }
+
+                        // show progress placeholders immediately on main thread
+                        withContext(Dispatchers.Main) {
+                            pbSecondary.visibility = View.VISIBLE
+                            pbTertiary.visibility = View.VISIBLE
+                            etDescSecondary.setText("Translating...")
+                            etDescTertiary.setText("Translating...")
+                        }
+
+                        // Kick off both translations concurrently, passing non-null API key (use !! because we enforced above)
                         val zuluDeferred = async(Dispatchers.IO) {
-                            translateText(currentText, zuluUrl!!, apiKeyForTranslate!!)
+                            translateText(currentText, currentZuluUrl!!, currentApiKey!!)
                         }
                         val afDeferred = async(Dispatchers.IO) {
-                            translateText(currentText, afrikaansUrl!!, apiKeyForTranslate!!)
+                            translateText(currentText, currentAfrUrl!!, currentApiKey!!)
                         }
 
-                        val zuluResult = zuluDeferred.await()
-                        val afResult = afDeferred.await()
+                        // await results (exceptions will bubble to the catch)
+                        val zuluResult = try { zuluDeferred.await() } catch (e: Exception) { null }
+                        val afResult = try { afDeferred.await() } catch (e: Exception) { null }
 
                         withContext(Dispatchers.Main) {
-                            // Only set if non-null (preserve potential manual edits otherwise)
-                            if (zuluResult != null) etDescSecondary.setText(zuluResult)
-                            if (afResult != null) etDescTertiary.setText(afResult)
+                            if (zuluResult != null) etDescSecondary.setText(zuluResult) else etDescSecondary.setText("")
+                            if (afResult != null) etDescTertiary.setText(afResult) else etDescTertiary.setText("")
                         }
+                    } catch (ex: CancellationException) {
+                        // user kept typing; ignore but ensure UI reset
+                        Log.d("AddUserFragment", "Translation job cancelled")
+                        withContext(Dispatchers.Main) {
+                            pbSecondary.visibility = View.GONE
+                            pbTertiary.visibility = View.GONE
+                        }
+                        throw ex
                     } catch (ex: Exception) {
-                        // If cancelled or failed, ignore here (optionally log)
+                        Log.w("AddUserFragment", "Translation job failed", ex)
+                        withContext(Dispatchers.Main) {
+                            pbSecondary.visibility = View.GONE
+                            pbTertiary.visibility = View.GONE
+                            // optionally clear placeholder texts
+                            // etDescSecondary.setText("")
+                            // etDescTertiary.setText("")
+                        }
+                    } finally {
+                        // ALWAYS hide progress bars after everything (success, failure or cancellation)
+                        withContext(Dispatchers.Main) {
+                            pbSecondary.visibility = View.GONE
+                            pbTertiary.visibility = View.GONE
+                        }
                     }
                 }
+
+
             }
 
             override fun afterTextChanged(s: Editable?) {}
@@ -320,6 +362,37 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
 
 
+        // Remote Config setup
+        val remoteConfig = Firebase.remoteConfig
+        val configSettings = remoteConfigSettings {
+            minimumFetchIntervalInSeconds = 3600
+        }
+        remoteConfig.setConfigSettingsAsync(configSettings)
+
+        //fallbakcs
+        remoteConfig.setDefaultsAsync(
+            mapOf("uploadImage_url" to "https://cloudinaryserver.onrender.com/upload",
+            "translate_zulu_url" to "https://mymemoryserver.onrender.com/translate/zu",
+            "translate_afrikaans_url" to "https://mymemoryserver.onrender.com/translate/af"
+        )
+        )
+        remoteConfig.fetchAndActivate()
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    imageUploadUrl = remoteConfig.getString("uploadImage_url")
+                    imageCloudApiKey = remoteConfig.getString("cloud_api_key")
+
+                    zuluUrl = remoteConfig.getString("translate_zulu_url")
+                    afrikaansUrl = remoteConfig.getString("translate_afrikaans_url")
+                    apiKeyForTranslate = remoteConfig.getString("translate_api_key")
+                    // DEBUG: log and show short toast (mask the actual key)
+                    Log.d("AddUserFragment", "RemoteConfig loaded: zulu=${zuluUrl.takeIf { !it.isNullOrBlank() }}, af=${afrikaansUrl.takeIf { !it.isNullOrBlank() }}, apiKeyPresent=${!apiKeyForTranslate.isNullOrBlank()}")
+                    Toast.makeText(requireContext(), "Remote config loaded (translations ${if (!zuluUrl.isNullOrBlank() && !afrikaansUrl.isNullOrBlank()) "ready" else "missing endpoints"})", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
+                    Log.w("AddUserFragment", "RemoteConfig fetch failed")
+                }
+            }
 
         // Date picker
         tvDate.setOnClickListener {
@@ -438,8 +511,24 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
      *
      * This function attempts to read common JSON keys that might contain the translated text.
      */
+
+
+    private fun sanitizeText(s: String): String {
+        // Strip simple HTML, collapse whitespace, remove weird control chars
+        var r = s.replace(Regex("<[^>]*>"), " ")
+        r = r.replace("&nbsp;", " ")
+        r = r.replace(Regex("\\s+"), " ").trim()
+        // Remove stray non-printable characters
+        r = r.replace(Regex("[\\u0000-\\u001F\\u007F]+"), "")
+        return r
+    }
+
+    /**
+     * Simplified translateText: returns the first readable translated text found.
+     * apiKey must be non-null (endpoint requires header).
+     */
     private fun translateText(originalText: String, url: String, apiKey: String): String? {
-        return try {
+        try {
             val jsonBody = JSONObject().put("text", originalText).toString()
             val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
 
@@ -449,36 +538,72 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 .addHeader("x-api-key", apiKey)
                 .build()
 
+            Log.d("AddUserFragment", "translateText: POST -> $url (len=${jsonBody.length})")
+
             val response = translateClient.newCall(request).execute()
             val body = response.body?.string() ?: return null
-            if (!response.isSuccessful) return null
 
-            // Try several possible keys the server might return
+            if (!response.isSuccessful) {
+                Log.w("AddUserFragment", "Translate API failed: code=${response.code} body=${body.take(1000)}")
+                return null
+            }
+
+            // Dev log: inspect the raw body if needed
+            Log.d("AddUserFragment", "translate response body: ${body.take(5000)}")
+
+            // Try JSON extraction (many providers follow similar shapes)
             try {
                 val j = JSONObject(body)
-                val candidates = listOf("translation", "translatedText", "translated", "result", "text", "data")
-                for (k in candidates) {
-                    val v = j.optString(k, "")
-                    if (v.isNotBlank()) return v
+
+                // 1) top-level translatedText
+                val top = j.optString("translatedText", "").trim()
+                if (top.isNotBlank()) return sanitizeText(top)
+
+                // 2) raw.responseData.translatedText
+                val rawObj = j.optJSONObject("raw")
+                if (rawObj != null) {
+                    val respData = rawObj.optJSONObject("responseData")
+                    val rawResp = respData?.optString("translatedText", "")?.trim()
+                    if (!rawResp.isNullOrBlank()) return sanitizeText(rawResp)
                 }
-                // If server dumped nested object e.g. { data: { translated: "..." } }, try to search a bit:
-                for (key in j.keys()) {
-                    val valObj = j.opt(key)
-                    if (valObj is JSONObject) {
-                        for (k in candidates) {
-                            val v2 = (valObj as JSONObject).optString(k, "")
-                            if (v2.isNotBlank()) return v2
-                        }
+
+                // 3) matches[] (first non-empty translation, else first non-empty segment)
+                val matchesArr = rawObj?.optJSONArray("matches") ?: j.optJSONArray("matches")
+                if (matchesArr != null && matchesArr.length() > 0) {
+                    for (i in 0 until matchesArr.length()) {
+                        val m = matchesArr.optJSONObject(i) ?: continue
+                        val tr = m.optString("translation", "").trim()
+                        if (tr.isNotBlank()) return sanitizeText(tr)
+                    }
+                    for (i in 0 until matchesArr.length()) {
+                        val m = matchesArr.optJSONObject(i) ?: continue
+                        val seg = m.optString("segment", "").trim()
+                        if (seg.isNotBlank()) return sanitizeText(seg)
                     }
                 }
-            } catch (_: Exception) { /* not JSON or unexpected shape */ }
 
-            // Fallback: return raw body if not empty
-            if (body.isNotBlank()) body else null
+                // 4) other common fallback keys
+                val keys = listOf("translation", "translated", "text", "result")
+                for (k in keys) {
+                    val v = j.optString(k, "").trim()
+                    if (v.isNotBlank()) return sanitizeText(v)
+                }
+            } catch (e: Exception) {
+                Log.d("AddUserFragment", "translateText: JSON parse failed or unexpected shape: ${e.message}")
+            }
+
+            // 5) fallback: sanitized raw body
+            val sanitized = sanitizeText(body)
+            if (sanitized.isNotBlank()) return sanitized
+
+            return null
         } catch (e: Exception) {
-            null
+            Log.w("AddUserFragment", "translateText failed", e)
+            return null
         }
     }
+
+
 
 
     private fun openGoogleTranslateFromPrimary(targetLang: String) {
@@ -802,6 +927,34 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         _binding = null
         translationJob?.cancel()
     }
+
+
+    private fun pasteFromClipboard(target: TextInputEditText) {
+        try {
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = clipboard.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).coerceToText(requireContext()).toString()
+                if (text.isNotBlank()) {
+                    // set text and place cursor at end
+                    target.setText(text)
+                    target.requestFocus()
+                    target.setSelection(target.text?.length ?: 0)
+                    // optional: show brief feedback
+                    Toast.makeText(requireContext(), "Pasted from clipboard", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(requireContext(), "Clipboard is empty", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(requireContext(), "Clipboard is empty", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.w("AddUserFragment", "pasteFromClipboard failed", e)
+            Toast.makeText(requireContext(), "Paste failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
 
 
 }

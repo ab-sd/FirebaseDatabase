@@ -50,20 +50,53 @@
                 android:layout_height="wrap_content" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Description (secondary) with Paste button + progress -->
         <TextView
             android:layout_marginTop="8dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Description (secondary)" />
-        <com.google.android.material.textfield.TextInputLayout
+
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_description_secondary"
-                android:hint="Description (secondary)"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.textfield.TextInputLayout>
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_description_secondary"
+                    android:hint="Description (secondary)"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btn_paste_secondary"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_paste"
+                android:contentDescription="Paste from clipboard"
+                android:tint="?attr/colorOnSurface"
+                android:layout_marginStart="8dp"
+                android:padding="8dp" />
+
+
+            <ProgressBar
+                android:id="@+id/pb_secondary_translate"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:layout_marginStart="6dp"/>
+
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_verify_secondary"
@@ -78,23 +111,55 @@
             android:textColor="?attr/colorPrimary"
             android:textStyle="bold"
             android:autoLink="none"
-
             android:foreground="?android:attr/selectableItemBackgroundBorderless" />
 
+
+
+        <!-- Description (tertiary) with Paste button + progress -->
         <TextView
             android:layout_marginTop="8dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Description (tertiary)" />
-        <com.google.android.material.textfield.TextInputLayout
+
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/et_description_tertiary"
-                android:hint="Description (tertiary)"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.textfield.TextInputLayout>
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_description_tertiary"
+                    android:hint="Description (tertiary)"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btn_paste_tertiary"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_paste"
+                android:contentDescription="Paste from clipboard"
+                android:layout_marginStart="8dp"
+                android:padding="8dp" />
+
+
+            <ProgressBar
+                android:id="@+id/pb_tertiary_translate"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:layout_marginStart="6dp"/>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_verify_tertiary"
@@ -109,8 +174,8 @@
             android:textColor="?attr/colorPrimary"
             android:textStyle="bold"
             android:autoLink="none"
-
             android:foreground="?android:attr/selectableItemBackgroundBorderless" />
+
 
 
         <!-- Date and Time -->
