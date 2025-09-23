@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/scrollView_edit"
     android:padding="16dp"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#FFFDE7"> <!-- pale yellow background -->
 
     <LinearLayout
         android:orientation="vertical"
@@ -11,59 +13,197 @@
         android:layout_height="wrap_content">
 
         <!-- Title -->
-        <EditText
-            android:id="@+id/et_edit_title"
-            android:hint="Event Title"
+        <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_edit_title"
+                android:hint="Please enter the title of event"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Event Type spinner -->
         <TextView
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Event Type" />
+            android:text="Event Type"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
+
         <Spinner
             android:id="@+id/spinner_edit_event_type"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:backgroundTint="#FBC02D" />
 
-        <!-- Descriptions (show all so user can edit any) -->
-        <TextView android:layout_marginTop="12dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (primary)" />
-        <EditText
-            android:id="@+id/et_edit_description_primary"
+        <!-- Event Description (primary) -->
+        <TextView
+            android:layout_marginTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Description (English)"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_edit_description_primary"
+                android:hint="Enter description details of event"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Description (secondary) -->
+        <TextView
+            android:layout_marginTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Description (isiZulu)"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Primary description" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (secondary)" />
-        <EditText
-            android:id="@+id/et_edit_description_secondary"
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_edit_description_secondary"
+                    android:hint="Enter description in isiZulu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="10dp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btn_paste_secondary_edit"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_paste"
+                android:contentDescription="Paste from clipboard"
+                android:layout_marginStart="8dp"
+                android:padding="8dp"
+                app:tint="#FBC02D" />
+
+            <ProgressBar
+                android:id="@+id/pb_edit_secondary_translate"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:layout_marginStart="6dp"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_verify_edit_secondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Open in Google Translate"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:paddingTop="4dp"
+            android:layout_marginStart="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
+
+        <!-- Description (tertiary) -->
+        <TextView
+            android:layout_marginTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Event Description (Afrikaans)"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Secondary description" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView android:layout_marginTop="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Description (tertiary)" />
-        <EditText
-            android:id="@+id/et_edit_description_tertiary"
-            android:layout_width="match_parent"
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_edit_description_tertiary"
+                    android:hint="Enter description in Afrikaans"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="10dp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btn_paste_tertiary_edit"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_paste"
+                android:contentDescription="Paste from clipboard"
+                android:layout_marginStart="8dp"
+                android:padding="8dp"
+                app:tint="#FBC02D" />
+
+            <ProgressBar
+                android:id="@+id/pb_edit_tertiary_translate"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:layout_marginStart="6dp"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_verify_edit_tertiary"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:hint="Tertiary description" />
+            android:text="Open in Google Translate"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:paddingTop="4dp"
+            android:layout_marginStart="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:textColor="#F57F17"
+            android:textStyle="bold" />
 
         <!-- Date & Time -->
         <LinearLayout
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:weightSum="2">
+
             <TextView
                 android:id="@+id/tv_edit_date"
                 android:layout_weight="1"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:padding="12dp"
-                android:text="Select date"/>
+                android:text="Select date"
+                android:textColor="#5D4037"
+                android:background="@drawable/bg_date_time"
+                android:gravity="center" />
 
             <TextView
                 android:id="@+id/tv_edit_time"
@@ -72,34 +212,53 @@
                 android:layout_height="wrap_content"
                 android:padding="12dp"
                 android:text="Select time"
-                android:layout_marginStart="8dp" />
+                android:textColor="#5D4037"
+                android:background="@drawable/bg_date_time"
+                android:gravity="center"
+                android:layout_marginStart="8dp"/>
+
         </LinearLayout>
 
         <!-- Duration -->
-        <EditText
-            android:id="@+id/et_edit_duration"
-            android:layout_marginTop="12dp"
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_marginTop="16dp"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:hint="Duration (minutes)" />
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_edit_duration"
+                android:inputType="number"
+                android:hint="Enter expected duration of event (minutes)"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Location -->
-        <EditText
-            android:id="@+id/et_edit_location"
-            android:layout_marginTop="12dp"
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_marginTop="16dp"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Location (address/venue)" />
+            android:layout_height="wrap_content">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_edit_location"
+                android:hint="Enter the location of event"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="10dp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Upcoming switch -->
+        <!-- Hide Upcoming Switch -->
         <LinearLayout
+            android:visibility="gone"
             android:layout_marginTop="12dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Is Upcoming?" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Is Upcoming?" />
+
             <Switch
                 android:id="@+id/switch_edit_upcoming"
                 android:layout_marginStart="12dp"
@@ -111,17 +270,21 @@
         <!-- image pick + count -->
         <Button
             android:id="@+id/btn_pick_more_images"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Add Images" />
+            android:text="Add Images (max 10)"
+            android:backgroundTint="#FBC02D"
+            android:textColor="#000000"
+            android:padding="10dp"/>
 
         <TextView
             android:id="@+id/tv_edit_images_count"
             android:layout_marginTop="8dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="No images" />
+            android:text="No images selected"
+            android:textColor="#616161" />
 
         <HorizontalScrollView
             android:layout_marginTop="8dp"
@@ -134,12 +297,15 @@
                 android:layout_height="match_parent"/>
         </HorizontalScrollView>
 
+        <!-- Save button -->
         <Button
             android:id="@+id/btn_update"
-            android:text="Update"
-            android:layout_marginTop="16dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
+            android:text="Save Event Details"
+            android:layout_marginTop="20dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#FBC02D"
+            android:textColor="#000000"
+            android:padding="12dp"/>
     </LinearLayout>
 </ScrollView>

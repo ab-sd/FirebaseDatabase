@@ -2,9 +2,10 @@ package com.example.basicfiredatabase.fragments
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -16,23 +17,21 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.basicfiredatabase.R
-import com.example.basicfiredatabase.utils.ImageCompressionUtil.loadThumbnail
-import com.example.basicfiredatabase.utils.ImageCompressionUtil.maybeCompressIfNeeded
+import com.example.basicfiredatabase.databinding.FragmentEditUserBinding
 import com.example.basicfiredatabase.utils.ImageUploadService
+import com.example.basicfiredatabase.utils.TranslationHelper
+import com.example.basicfiredatabase.utils.TranslationHelper.pasteFromClipboard
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.remoteconfig.ktx.remoteConfig
 import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -40,176 +39,190 @@ import java.util.concurrent.TimeUnit
 
 class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
-    private val db = Firebase.firestore
-    private var userId: String? = null
+    private var _binding: FragmentEditUserBinding? = null
+    private val binding get() = _binding!!
 
-    // mutable lists for existing images (from server) and newly selected local image URIs
-    private val existingImages = mutableListOf<MutableMap<String, String>>() // list of maps: "url","public_id"
+    private val db by lazy { Firebase.firestore }
+
+    // Image state
+    // existingImages: mutable list of maps with keys "url" and "public_id"
+    private val existingImages = mutableListOf<MutableMap<String, String>>()
     private val newImageUris = mutableListOf<Uri>()
-
-    // public_ids that user chose to delete (these will be sent to delete endpoint on Update)
     private val imagesToDelete = mutableListOf<String>()
 
-    //firebase remote config values
-    private var imageCloudApiKey: String? = null
+    // progress UI map: keys like "existing:<public_id>" or "new:<index>"
+    private val progressMap = mutableMapOf<String, ProgressBar>()
+
+    // Remote Config values (upload/delete + translation endpoints)
     private var uploadUrl: String? = null
     private var deleteUrl: String? = null
+    private var imageCloudApiKey: String? = null
 
-    // progress bars for items (keys = "existing:<public_id>" or "new:<index>")
-    private val progressMap = mutableMapOf<String, ProgressBar>()
+    private var zuluUrl: String? = null
+    private var afrikaansUrl: String? = null
+    private var apiKeyForTranslate: String? = null
+
+    // translation debounce job
+    private var translationJob: Job? = null
+    private var originalPrimaryText: String = ""
+
+    // Accept doc id
+    private var docIdArg: String? = null
+
+    private var isInitializing = false
+
 
     private val pickImagesLauncher =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-            if (uris == null) return@registerForActivityResult
-            // ensure total images won't exceed 10
+            if (uris == null || uris.isEmpty()) return@registerForActivityResult
+
             val currentTotal = existingImages.size + newImageUris.size
             val spaceLeft = maxOf(0, 10 - currentTotal)
-            if (uris.isNotEmpty() && spaceLeft <= 0) {
+            if (spaceLeft <= 0) {
                 Toast.makeText(requireContext(), "Maximum 10 images allowed", Toast.LENGTH_SHORT).show()
                 return@registerForActivityResult
             }
+
             val toAdd = uris.take(spaceLeft)
             newImageUris.addAll(toAdd)
-            updateImagesUI()
+            renderImages()
         }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        _binding = FragmentEditUserBinding.bind(view)
 
-        val scrollView = view.findViewById<ScrollView>(R.id.scrollView_edit) // Wrap your layout in ScrollView
-        var lastImeHeight = 0
-        var lastNavHeight = 0
-        var currentFocusedView: View? = null
-
-        fun scrollToView(view: View) {
-            val rect = android.graphics.Rect()
-            view.getDrawingRect(rect)
-            scrollView.offsetDescendantRectToMyCoords(view, rect)
-            val visibleHeight = scrollView.height - lastImeHeight - lastNavHeight
-            val scrollY = rect.bottom - visibleHeight + dpToPx(12)
-            scrollView.post { scrollView.smoothScrollTo(0, maxOf(0, scrollY)) }
-        }
-
-        val etTitle = view.findViewById<EditText>(R.id.et_edit_title)
-        val spinnerType = view.findViewById<Spinner>(R.id.spinner_edit_event_type)
-        val etDescPrimary = view.findViewById<EditText>(R.id.et_edit_description_primary)
-        val etDescSecondary = view.findViewById<EditText>(R.id.et_edit_description_secondary)
-        val etDescTertiary = view.findViewById<EditText>(R.id.et_edit_description_tertiary)
-        val tvDate = view.findViewById<TextView>(R.id.tv_edit_date)
-        val tvTime = view.findViewById<TextView>(R.id.tv_edit_time)
-        val etDuration = view.findViewById<EditText>(R.id.et_edit_duration)
-        val etLocation = view.findViewById<EditText>(R.id.et_edit_location)
-        val switchUpcoming = view.findViewById<Switch>(R.id.switch_edit_upcoming)
-
-        val btnUpdate = view.findViewById<Button>(R.id.btn_update)
-        val btnPick = view.findViewById<Button>(R.id.btn_pick_more_images)
-        val tvCount = view.findViewById<TextView>(R.id.tv_edit_images_count)
-        val llImages = view.findViewById<LinearLayout>(R.id.ll_edit_images)
-
-
-        // Focus listeners for all EditTexts near bottom
-        val focusableFields = listOf(
-            etTitle, etDescPrimary, etDescSecondary, etDescTertiary, etDuration, etLocation
-        )
-        for (field in focusableFields) {
-            field.setOnFocusChangeListener { v, hasFocus ->
-                if (hasFocus) {
-                    currentFocusedView = v
-                    v.postDelayed({ scrollToView(v) }, 120)
-                }
-            }
-            field.setOnClickListener { v ->
-                currentFocusedView = v
-                v.post { scrollToView(v) }
-            }
-        }
-
-        // Handle insets (IME + nav bar)
-        ViewCompat.setOnApplyWindowInsetsListener(scrollView) { v, insets ->
+        // Window inset handling similar to AddUser
+        ViewCompat.setOnApplyWindowInsetsListener(binding.scrollViewEdit) { v, insets ->
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            lastNavHeight = navBottom
-            lastImeHeight = imeBottom
+            val extraGap = dpToPx(4)
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + extraGap)
 
-            // Bottom padding ensures scrolling works for all content
-            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + dpToPx(8))
-
-            // Update button margin so it's not flush against nav bar
-            val lp = btnUpdate.layoutParams
+            val lp = binding.btnUpdate.layoutParams
             if (lp is ViewGroup.MarginLayoutParams) {
-                val desiredBottomMargin = navBottom + dpToPx(16)
+                val desiredBottomMargin = navBottom + dpToPx(6)
                 if (lp.bottomMargin != desiredBottomMargin) {
                     lp.bottomMargin = desiredBottomMargin
-                    btnUpdate.layoutParams = lp
+                    binding.btnUpdate.layoutParams = lp
                 }
             }
-
-            // Scroll focused field if keyboard is showing
-            if (imeBottom > 0) currentFocusedView?.let { fv -> v.post { scrollToView(fv) } }
-
             insets
         }
 
-        // read arguments
-        userId = arguments?.getString("id")
-        val title = arguments?.getString("title") ?: ""
-        val eventTypeArg = arguments?.getString("event_type") ?: "Other"
-        @Suppress("UNCHECKED_CAST")
-        val descriptionsArg = (arguments?.getSerializable("descriptions") as? HashMap<*, *>)?.mapNotNull { e ->
-            val k = e.key as? String; val v = e.value as? String
-            if (k != null && v != null) k to v else null
-        }?.toMap() ?: emptyMap()
+        // Load remote config (upload/delete + translate endpoints)
+        setupRemoteConfig()
 
-        val dateArg = arguments?.getString("date") ?: ""
-        val timeArg = arguments?.getString("time") ?: ""
-        val durationArg = arguments?.getInt("duration_minutes")
-        val locationArg = arguments?.getString("location")
-        val isUpcomingArg = arguments?.getBoolean("is_upcoming") ?: true
-
-        @Suppress("UNCHECKED_CAST")
-        val imgs = arguments?.getSerializable("images") as? ArrayList<*>
-        existingImages.clear()
-        if (imgs != null) {
-            for (item in imgs) {
-                val map = item as? Map<*, *>
-                val url = map?.get("url") as? String ?: continue
-                val publicId = map?.get("public_id") as? String ?: continue
-                existingImages.add(mutableMapOf("url" to url, "public_id" to publicId))
-            }
+        // Paste buttons
+        binding.btnPasteSecondaryEdit.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etEditDescriptionSecondary)
+        }
+        binding.btnPasteTertiaryEdit.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etEditDescriptionTertiary)
         }
 
-        // Spinner items (same as AddUserFragment)
-        val types = listOf("Conference", "Meetup", "Workshop", "Seminar", "Party", "Other")
-        spinnerType.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
+        // Verify links (open Google Translate)
+        binding.tvVerifyEditSecondary.setOnClickListener {
+            TranslationHelper.openGoogleTranslateFromPrimary(
+                this@EditUserFragment,
+                binding.etEditDescriptionPrimary.text?.toString().orEmpty(),
+                "zu"
+            )
+        }
+        binding.tvVerifyEditTertiary.setOnClickListener {
+            TranslationHelper.openGoogleTranslateFromPrimary(
+                this@EditUserFragment,
+                binding.etEditDescriptionPrimary.text?.toString().orEmpty(),
+                "af"
+            )
+        }
 
-        // set initial UI from args
-        etTitle.setText(title)
-        val idx = types.indexOf(eventTypeArg).let { if (it >= 0) it else types.size - 1 }
-        spinnerType.setSelection(idx)
+        // Date/time pickers
+        binding.tvEditDate.setOnClickListener {
+            val c = Calendar.getInstance()
+            val dp = DatePickerDialog(
+                requireContext(),
+                { _, year, month, dayOfMonth ->
+                    val cal = Calendar.getInstance()
+                    cal.set(year, month, dayOfMonth)
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    binding.tvEditDate.text = sdf.format(cal.time)
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+            )
+            dp.show()
+        }
 
-        etDescPrimary.setText(descriptionsArg["primary"] ?: "")
-        etDescSecondary.setText(descriptionsArg["secondary"] ?: "")
-        etDescTertiary.setText(descriptionsArg["tertiary"] ?: "")
+        binding.tvEditTime.setOnClickListener {
+            val c = Calendar.getInstance()
+            val tp = TimePickerDialog(
+                requireContext(),
+                { _, hourOfDay, minute ->
+                    val formatted = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
+                    binding.tvEditTime.text = formatted
+                },
+                c.get(Calendar.HOUR_OF_DAY),
+                c.get(Calendar.MINUTE),
+                true
+            )
+            tp.show()
+        }
 
-        tvDate.text = if (dateArg.isNotBlank()) dateArg else "Select date"
-        tvTime.text = if (timeArg.isNotBlank()) timeArg else "Select time"
-        etDuration.setText(durationArg?.takeIf { it > 0 }?.toString() ?: "")
-        etLocation.setText(locationArg ?: "")
-        switchUpcoming.isChecked = isUpcomingArg
+        // Spinner choices (keep consistent with AddUser)
+        val types = listOf(
+            "Community Feeding Program",
+            "Back-to-School Drive",
+            "Children’s Health and Wellness Fair",
+            "Sports and Recreation Day",
+            "Community Clean-Up and Beautification",
+            "Food and Hygiene Pack Distribution",
+            "Emergency Relief Fundraising Event",
+            "Other"
+        )
+        binding.spinnerEditEventType.adapter =
+            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
 
+        // Setup primary description watcher (debounced translation). We'll set originalPrimaryText when doc is loaded.
+        setupPrimaryTranslationWatcher()
 
-        // Remote Config setup: get both upload & delete endpoints
+        // pick more images
+        binding.btnPickMoreImages.setOnClickListener { pickImagesLauncher.launch("image/*") }
+
+        // Update button logic
+        binding.btnUpdate.setOnClickListener {
+            performUpdate()
+        }
+
+        // Determine docId (support both keys)
+        val argDocId = arguments?.getString("docId")
+        val argId = arguments?.getString("id")
+        docIdArg = argDocId ?: argId
+
+        // If docId provided -> load from Firestore; otherwise attempt to populate from arguments bundle (old behavior)
+        if (!docIdArg.isNullOrBlank()) {
+            loadDocumentAndPopulate(docIdArg!!)
+        } else {
+            populateFromArgumentsIfPresent()
+            renderImages()
+        }
+    }
+
+    // -----------------------
+    // Remote Config
+    // -----------------------
+    private fun setupRemoteConfig() {
         val remoteConfig = Firebase.remoteConfig
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600
-        }
+        val configSettings = remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 }
         remoteConfig.setConfigSettingsAsync(configSettings)
 
-        // default fallbacks (so app still works offline)
         remoteConfig.setDefaultsAsync(
             mapOf(
                 "uploadImage_url" to "https://cloudinaryserver.onrender.com/upload",
-                "deleteImage_url" to "https://cloudinaryserver.onrender.com/delete"
+                "deleteImage_url" to "https://cloudinaryserver.onrender.com/delete",
+                "translate_zulu_url" to "https://mymemoryserver.onrender.com/translate/zu",
+                "translate_afrikaans_url" to "https://mymemoryserver.onrender.com/translate/af"
             )
         )
 
@@ -219,322 +232,536 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     uploadUrl = remoteConfig.getString("uploadImage_url")
                     deleteUrl = remoteConfig.getString("deleteImage_url")
                     imageCloudApiKey = remoteConfig.getString("cloud_api_key")
-                    Toast.makeText(requireContext(), "RC: upload and delete URLs loaded", Toast.LENGTH_SHORT).show()
+
+                    zuluUrl = remoteConfig.getString("translate_zulu_url")
+                    afrikaansUrl = remoteConfig.getString("translate_afrikaans_url")
+                    apiKeyForTranslate = remoteConfig.getString("translate_api_key")
+
+                    Toast.makeText(requireContext(), "Remote config loaded", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
                 }
             }
+    }
 
-        // set local reference for updates
-        _tvCount = tvCount
-        _llImages = llImages
+    // -----------------------
+    // Load existing document & populate UI
+    // -----------------------
+    private fun loadDocumentAndPopulate(docId: String) {
+        db.collection("users").document(docId).get()
+            .addOnSuccessListener { snapshot ->
+                if (!snapshot.exists()) {
+                    Toast.makeText(requireContext(), "Document not found", Toast.LENGTH_LONG).show()
+                    return@addOnSuccessListener
+                }
 
-        updateImagesUI()
+                val title = snapshot.getString("title") ?: ""
+                val eventType = snapshot.getString("event_type") ?: "Other"
+                val descriptions = snapshot.get("descriptions") as? Map<*, *>
+                val date = snapshot.getString("date") ?: ""
+                val time = snapshot.getString("time") ?: ""
+                val duration = snapshot.getLong("duration_minutes")?.toString() ?: ""
+                val location = snapshot.getString("location") ?: ""
+                val isUpcoming = snapshot.getBoolean("is_upcoming") ?: true
 
-        // date picker
-        tvDate.setOnClickListener {
-            val c = Calendar.getInstance()
-            val dp = DatePickerDialog(
-                requireContext(),
-                { _, year, month, day ->
-                    val cal = Calendar.getInstance()
-                    cal.set(year, month, day)
-                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    tvDate.text = sdf.format(cal.time)
-                },
-                c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)
-            )
-            dp.show()
-        }
+                // images
+                val imagesList = snapshot.get("images") as? List<Map<String, Any>>
+                existingImages.clear()
+                imagesList?.forEach { map ->
+                    val url = map["url"]?.toString()
+                    val publicId = map["public_id"]?.toString()
+                    if (!url.isNullOrBlank() && !publicId.isNullOrBlank()) {
+                        existingImages.add(mutableMapOf("url" to url, "public_id" to publicId))
+                    }
+                }
+
+                isInitializing = true
+
+                // populate UI
+                binding.etEditTitle.setText(title)
+                // set spinner selection (match by exact string)
+                val adapter = binding.spinnerEditEventType.adapter
+                if (adapter != null) {
+                    for (i in 0 until adapter.count) {
+                        if (adapter.getItem(i)?.toString() == eventType) {
+                            binding.spinnerEditEventType.setSelection(i)
+                            break
+                        }
+                    }
+                }
+                val primary = descriptions?.get("primary")?.toString() ?: ""
+                val secondary = descriptions?.get("secondary")?.toString() ?: ""
+                val tertiary = descriptions?.get("tertiary")?.toString() ?: ""
+
+                binding.etEditDescriptionPrimary.setText(primary)
+                binding.etEditDescriptionSecondary.setText(secondary)
+                binding.etEditDescriptionTertiary.setText(tertiary)
+
+                // record original primary to avoid unnecessary re-translation
+                originalPrimaryText = primary
+                isInitializing = false
 
 
-        // time picker
-        tvTime.setOnClickListener {
-            val c = Calendar.getInstance()
-            val tp = TimePickerDialog(
-                requireContext(),
-                { _, hourOfDay, minute ->
-                    tvTime.text = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
-                },
-                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true
-            )
-            tp.show()
-        }
+                binding.tvEditDate.text = if (date.isNotBlank()) date else "Select date"
+                binding.tvEditTime.text = if (time.isNotBlank()) time else "Select time"
+                binding.etEditDuration.setText(duration)
+                binding.etEditLocation.setText(location)
+                binding.switchEditUpcoming.isChecked = isUpcoming
 
-
-
-        btnPick.setOnClickListener {
-            // allow picking images (will enforce 10 limit in launcher callback)
-            pickImagesLauncher.launch("image/*")
-        }
-
-        btnUpdate.setOnClickListener {
-            val newTitle = etTitle.text.toString().trim()
-            val newType = spinnerType.selectedItem.toString()
-            val descPrimaryTxt = etDescPrimary.text.toString().trim()
-            val descSecondaryTxt = etDescSecondary.text.toString().trim()
-            val descTertiaryTxt = etDescTertiary.text.toString().trim()
-            val descriptions = mutableMapOf<String, String>()
-            if (descPrimaryTxt.isNotEmpty()) descriptions["primary"] = descPrimaryTxt
-            if (descSecondaryTxt.isNotEmpty()) descriptions["secondary"] = descSecondaryTxt
-            if (descTertiaryTxt.isNotEmpty()) descriptions["tertiary"] = descTertiaryTxt
-
-            val date = tvDate.text.toString().trim()
-            val time = tvTime.text.toString().trim()
-            val durationMinutes = etDuration.text.toString().toIntOrNull()
-            val location = etLocation.text.toString().trim().takeIf { it.isNotEmpty() }
-            val isUpcoming = switchUpcoming.isChecked
-
-            if (userId == null || newTitle.isEmpty()) {
-                Toast.makeText(requireContext(), "Fill in title", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                renderImages()
             }
+            .addOnFailureListener { ex ->
+                Toast.makeText(requireContext(), "Failed to load: ${ex.message}", Toast.LENGTH_LONG).show()
+            }
+    }
 
-            btnUpdate.isEnabled = false
-            btnPick.isEnabled = false
+    // Fallback: populate from arguments (old behavior you had)
+    private fun populateFromArgumentsIfPresent() {
+        val args = arguments ?: return
+        val title = args.getString("title") ?: ""
+        val eventTypeArg = args.getString("event_type") ?: "Other"
+        @Suppress("UNCHECKED_CAST")
+        val descriptionsArg = (args.getSerializable("descriptions") as? HashMap<*, *>)?.mapNotNull { e ->
+            val k = e.key as? String; val v = e.value as? String
+            if (k != null && v != null) k to v else null
+        }?.toMap() ?: emptyMap()
 
-            lifecycleScope.launchWhenStarted {
-                try {
-                    // 1) upload new images if any
-                    val uploadedNewImages = if (newImageUris.isNotEmpty()) {
-                        if (uploadUrl.isNullOrEmpty()) throw Exception("Upload URL not available")
-                        uploadNewImages(newImageUris)
-                    } else emptyList()
+        val dateArg = args.getString("date") ?: ""
+        val timeArg = args.getString("time") ?: ""
+        val durationArg = args.getInt("duration_minutes", 0)
+        val locationArg = args.getString("location") ?: ""
+        val isUpcomingArg = args.getBoolean("is_upcoming", true)
 
-                    // 2) delete marked images
-                    if (imagesToDelete.isNotEmpty()) {
-                        if (deleteUrl.isNullOrEmpty()) throw Exception("Delete URL not available")
-                        val delOk = deleteMarkedImages(imagesToDelete)
-                        if (!delOk) throw Exception("Failed to delete some images")
-                    }
+        @Suppress("UNCHECKED_CAST")
+        val imgs = args.getSerializable("images") as? ArrayList<*>
+        existingImages.clear()
+        if (imgs != null) {
+            for (item in imgs) {
+                val map = item as? Map<*, *> ?: continue
+                val url = map["url"] as? String ?: continue
+                val publicId = map["public_id"] as? String ?: continue
+                existingImages.add(mutableMapOf("url" to url, "public_id" to publicId))
+            }
+        }
 
-                    // 3) build final images array
-                    val finalImages = mutableListOf<Map<String, String>>()
-                    finalImages.addAll(existingImages.map { mapOf("url" to it["url"]!!, "public_id" to it["public_id"]!!) })
-                    finalImages.addAll(uploadedNewImages)
+        isInitializing = true
 
-                    // 4) update map (all event fields)
-                    val updateMap = hashMapOf<String, Any?>(
-                        "title" to newTitle,
-                        "event_type" to newType,
-                        "descriptions" to descriptions,
-                        "date" to (if (date == "Select date") "" else date),
-                        "time" to (if (time == "Select time") "" else time),
-                        "duration_minutes" to durationMinutes,
-                        "images" to finalImages,
-                        "location" to location,
-                        "is_upcoming" to isUpcoming
-                    )
-
-                    withContext(Dispatchers.Main) {
-                        db.collection("users").document(userId!!)
-                            .update(updateMap)
-                            .addOnSuccessListener {
-                                Toast.makeText(requireContext(), "Updated!", Toast.LENGTH_SHORT).show()
-                                parentFragmentManager.popBackStack()
-                            }
-                            .addOnFailureListener { e ->
-                                Toast.makeText(requireContext(), "Update failed: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "Operation failed: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                } finally {
-                    withContext(Dispatchers.Main) {
-                        btnUpdate.isEnabled = true
-                        btnPick.isEnabled = true
-                    }
+        binding.etEditTitle.setText(title)
+        val adapter = binding.spinnerEditEventType.adapter
+        if (adapter != null) {
+            for (i in 0 until adapter.count) {
+                if (adapter.getItem(i)?.toString() == eventTypeArg) {
+                    binding.spinnerEditEventType.setSelection(i)
+                    break
                 }
             }
         }
+        val p = descriptionsArg["primary"] ?: ""
+        binding.etEditDescriptionPrimary.setText(p)
+        binding.etEditDescriptionSecondary.setText(descriptionsArg["secondary"] ?: "")
+        binding.etEditDescriptionTertiary.setText(descriptionsArg["tertiary"] ?: "")
+        originalPrimaryText = p
+
+        binding.tvEditDate.text = if (dateArg.isNotBlank()) dateArg else "Select date"
+        binding.tvEditTime.text = if (timeArg.isNotBlank()) timeArg else "Select time"
+        binding.etEditDuration.setText(if (durationArg > 0) durationArg.toString() else "")
+        binding.etEditLocation.setText(locationArg)
+        binding.switchEditUpcoming.isChecked = isUpcomingArg
     }
 
-    // convenience references
-    private var _tvCount: TextView? = null
-    private var _llImages: LinearLayout? = null
-
-    private fun updateImagesUI() {
-        val tv = _tvCount ?: return
-        val container = _llImages ?: return
-        val total = existingImages.size + newImageUris.size
-        tv.text = "$total image(s) (max 10)"
-
-        container.removeAllViews()
+    // -----------------------
+    // UI: render images strip (existing + new)
+    // -----------------------
+    private fun renderImages() {
+        val ll = binding.llEditImages
+        ll.removeAllViews()
         progressMap.clear()
 
-        val sizePx = (resources.displayMetrics.density * 160).toInt()
-        val marginPx = (resources.displayMetrics.density * 6).toInt()
+        val sizePx = dpToPx(140)
+        val marginPx = dpToPx(6)
 
-        // show existing images first (they have url & public_id)
+        // existing images first
         for ((idx, img) in existingImages.withIndex()) {
             val frame = FrameLayout(requireContext())
-            val frameLp = LinearLayout.LayoutParams(sizePx, sizePx)
+            val frameLp = LinearLayout.LayoutParams(sizePx, ViewGroup.LayoutParams.MATCH_PARENT)
             frameLp.setMargins(marginPx, marginPx, marginPx, marginPx)
             frame.layoutParams = frameLp
 
             val iv = ImageView(requireContext())
-            val ivLp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            iv.layoutParams = ivLp
+            iv.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            iv.scaleType = ImageView.ScaleType.CENTER_CROP
+            Glide.with(this).load(img["url"]).into(iv)
+            frame.addView(iv)
 
-            iv.scaleType = ImageView.ScaleType.FIT_CENTER
-            iv.adjustViewBounds = true
-
-            Glide.with(requireContext()).load(img["url"]).into(iv)
-
-            // small delete button (overlay)
-            val deleteBtn = ImageButton(requireContext())
-            val dbSize = (resources.displayMetrics.density * 22).toInt()
-            val dbLp = FrameLayout.LayoutParams(dbSize, dbSize)
-            dbLp.gravity = Gravity.END or Gravity.TOP
-            deleteBtn.layoutParams = dbLp
-            deleteBtn.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            deleteBtn.scaleType = ImageView.ScaleType.CENTER
-            deleteBtn.setBackgroundResource(android.R.color.transparent)
-            deleteBtn.setOnClickListener {
-                // mark this image for deletion and remove from existingImages
+            // remove button (marks for deletion)
+            val removeBtn = ImageButton(requireContext())
+            val dbSize = dpToPx(36)
+            val remLp = FrameLayout.LayoutParams(dbSize, dbSize)
+            remLp.gravity = Gravity.END or Gravity.TOP
+            remLp.topMargin = dpToPx(6)
+            remLp.marginEnd = dpToPx(6)
+            removeBtn.layoutParams = remLp
+            removeBtn.setImageResource(R.drawable.ic_close)
+            removeBtn.setBackgroundResource(android.R.color.transparent)
+            removeBtn.setOnClickListener {
                 val publicId = img["public_id"] ?: return@setOnClickListener
                 imagesToDelete.add(publicId)
                 existingImages.removeAt(idx)
-                updateImagesUI()
+                renderImages()
             }
+            frame.addView(removeBtn)
 
+            // progress overlay
             val progress = ProgressBar(requireContext())
-            val pSize = (resources.displayMetrics.density * 32).toInt()
+            val pSize = dpToPx(40)
             val pLp = FrameLayout.LayoutParams(pSize, pSize)
             pLp.gravity = Gravity.CENTER
             progress.layoutParams = pLp
             progress.isIndeterminate = true
-            try {
-                progress.indeterminateTintList = resources.getColorStateList(android.R.color.holo_orange_light, null)
-            } catch (_: Exception) { }
             progress.visibility = View.GONE
-
             val key = "existing:${img["public_id"]}"
             progressMap[key] = progress
-
-            frame.addView(iv)
-            frame.addView(deleteBtn)
             frame.addView(progress)
-            container.addView(frame)
+
+            ll.addView(frame)
         }
 
-        // show new (local) images
+        // new local images
         for ((index, uri) in newImageUris.withIndex()) {
             val frame = FrameLayout(requireContext())
-            val frameLp = LinearLayout.LayoutParams(sizePx, sizePx)
+            val frameLp = LinearLayout.LayoutParams(sizePx, ViewGroup.LayoutParams.MATCH_PARENT)
             frameLp.setMargins(marginPx, marginPx, marginPx, marginPx)
             frame.layoutParams = frameLp
 
             val iv = ImageView(requireContext())
-            val ivLp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            iv.layoutParams = ivLp
+            iv.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             iv.scaleType = ImageView.ScaleType.CENTER_CROP
-            iv.setImageBitmap(loadThumbnail(requireContext(), uri, 512))
+            Glide.with(this).load(uri).into(iv)
+            frame.addView(iv)
 
-            // small delete button for removing selection (not server delete)
-            val deleteBtn = ImageButton(requireContext())
-            val dbSize = (resources.displayMetrics.density * 22).toInt()
-            val dbLp = FrameLayout.LayoutParams(dbSize, dbSize)
-            dbLp.gravity = Gravity.END or Gravity.TOP
-            deleteBtn.layoutParams = dbLp
-            deleteBtn.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            deleteBtn.setBackgroundResource(android.R.color.transparent)
-            deleteBtn.setOnClickListener {
+            val removeBtn = ImageButton(requireContext())
+            val dbSize = dpToPx(36)
+            val remLp = FrameLayout.LayoutParams(dbSize, dbSize)
+            remLp.gravity = Gravity.END or Gravity.TOP
+            remLp.topMargin = dpToPx(6)
+            remLp.marginEnd = dpToPx(6)
+            removeBtn.layoutParams = remLp
+            removeBtn.setImageResource(R.drawable.ic_close)
+            removeBtn.setBackgroundResource(android.R.color.transparent)
+            removeBtn.setOnClickListener {
                 newImageUris.removeAt(index)
-                updateImagesUI()
+                renderImages()
             }
+            frame.addView(removeBtn)
 
             val progress = ProgressBar(requireContext())
-            val pSize = (resources.displayMetrics.density * 32).toInt()
+            val pSize = dpToPx(40)
             val pLp = FrameLayout.LayoutParams(pSize, pSize)
             pLp.gravity = Gravity.CENTER
             progress.layoutParams = pLp
             progress.isIndeterminate = true
-            try {
-                progress.indeterminateTintList = resources.getColorStateList(android.R.color.holo_orange_light, null)
-            } catch (_: Exception) { }
             progress.visibility = View.GONE
-
             val key = "new:$index"
             progressMap[key] = progress
-
-            frame.addView(iv)
-            frame.addView(deleteBtn)
             frame.addView(progress)
-            container.addView(frame)
+
+            ll.addView(frame)
         }
+
+        // update count text
+        val total = existingImages.size + newImageUris.size
+        binding.tvEditImagesCount.text = if (total == 0) "No images" else "$total / 10 images"
+
+        // disable/enable pick button based on max
+        binding.btnPickMoreImages.isEnabled = total < 10
+
     }
 
-    // Upload only the new local images and return list of maps { "url":..., "public_id":... }
+    // -----------------------
+    // Upload new images (only local ones). Returns list of maps { "url":..., "public_id":... }
+    // -----------------------
     private suspend fun uploadNewImages(uris: List<Uri>): List<Map<String, String>> {
-        // quick-return if nothing to upload
         if (uris.isEmpty()) return emptyList()
-
-        // ensure we have the upload URL & api key (caller already checks, but be defensive)
         val url = uploadUrl ?: throw Exception("Upload URL not available")
-        val apiKey = imageCloudApiKey ?: throw Exception("Image API key not available")
+        val apiKey = imageCloudApiKey ?: ""
 
-        // Build stable keys that match this fragment's progressMap keys ("new:<index>")
+        // build pairs keyed by "new:<index>" so onProgress can map back to progressMap
         val pairs = uris.mapIndexed { idx, uri -> "new:$idx" to uri }
 
-        // Delegate to the service. The service will call onProgress on the main thread.
-        return ImageUploadService.uploadUris(
-            requireContext(),
-            pairs,
-            url,
-            apiKey,
-            onProgress = { key, visible ->
-                // This fragment stores progress bars with keys like "new:<index>"
+        return ImageUploadService.uploadUris(requireContext(), pairs, url, apiKey) { key, visible ->
+            // key will be like "new:0"
+            lifecycleScope.launchWhenStarted {
                 progressMap[key]?.visibility = if (visible) View.VISIBLE else View.GONE
-            }
-        )
-    }
-
-
-    private fun dpToPx(dp: Int): Int {
-        return (dp * resources.displayMetrics.density).toInt()
-    }
-
-
-    // Delete the public_ids passed (calls the deleteUrl endpoint). Returns true if all deletions succeeded.
-    private suspend fun deleteMarkedImages(publicIds: List<String>): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .writeTimeout(30, TimeUnit.SECONDS)
-                    .readTimeout(30, TimeUnit.SECONDS)
-                    .build()
-
-                for (id in publicIds) {
-                    val key = "existing:$id"
-                    withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.VISIBLE }
-
-                    val body = JSONObject().put("public_id", id).toString()
-                        .toRequestBody("application/json".toMediaTypeOrNull())
-
-                    val request = Request.Builder()
-                        .url(deleteUrl!!)
-                        .post(body)
-                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
-                        .build()
-
-                    val response = client.newCall(request).execute()
-                    withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.GONE }
-                    if (!response.isSuccessful) {
-                        return@withContext false
-                    }
-                }
-                true
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { progressMap.values.forEach { it.visibility = View.GONE } }
-                false
             }
         }
     }
 
+    // -----------------------
+    // Delete marked images via deleteUrl. Posts a JSON with "public_ids": [...]
+    // Returns true on success (http 200)
+    // -----------------------
+    private suspend fun deleteMarkedImages(publicIds: List<String>): Boolean = withContext(Dispatchers.IO) {
+        if (publicIds.isEmpty()) return@withContext true
+        val url = deleteUrl ?: return@withContext false
+        try {
+            val client = OkHttpClient.Builder()
+                .callTimeout(60, TimeUnit.SECONDS)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build()
+
+            for (id in publicIds) {
+                val key = "existing:$id"
+                withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.VISIBLE }
+
+                val root = JSONObject().put("public_id", id)
+                if (!imageCloudApiKey.isNullOrBlank()) root.put("api_key", imageCloudApiKey)
+
+                val body = root.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .apply { if (!imageCloudApiKey.isNullOrBlank()) addHeader("x-api-key", imageCloudApiKey!!) }
+                    .build()
+
+                val resp = client.newCall(request).execute()
+                withContext(Dispatchers.Main) { progressMap[key]?.visibility = View.GONE }
+                if (!resp.isSuccessful) return@withContext false
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            withContext(Dispatchers.Main) { publicIds.forEach { progressMap["existing:$it"]?.visibility = View.GONE } }
+            false
+        }
+    }
 
 
+    // -----------------------
+    // Update flow (uploads new images, deletes marked, then update firestore)
+    // -----------------------
+    private fun performUpdate() {
+        val title = binding.etEditTitle.text?.toString()?.trim() ?: ""
+        if (title.isEmpty()) {
+            Toast.makeText(requireContext(), "Enter event title", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val date = binding.tvEditDate.text?.toString()?.trim() ?: ""
+        if (date.isEmpty() || date == "Select date") {
+            Toast.makeText(requireContext(), "Select event date", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val time = binding.tvEditTime.text?.toString()?.trim() ?: ""
+        if (time.isEmpty() || time == "Select time") {
+            Toast.makeText(requireContext(), "Select event time", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val descPrimary = binding.etEditDescriptionPrimary.text?.toString()?.trim() ?: ""
+        val descSecondary = binding.etEditDescriptionSecondary.text?.toString()?.trim() ?: ""
+        val descTertiary = binding.etEditDescriptionTertiary.text?.toString()?.trim() ?: ""
+
+        if (descPrimary.isEmpty() || descSecondary.isEmpty() || descTertiary.isEmpty()) {
+            Toast.makeText(requireContext(), "Please fill in all 3 descriptions", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val descriptions = mapOf(
+            "primary" to descPrimary,
+            "secondary" to descSecondary,
+            "tertiary" to descTertiary
+        )
+
+        val eventType = binding.spinnerEditEventType.selectedItem?.toString() ?: "Other"
+
+        val durationMinutes = binding.etEditDuration.text?.toString()?.toIntOrNull()
+        if (durationMinutes == null || durationMinutes <= 0) {
+            Toast.makeText(requireContext(), "Enter valid duration (minutes)", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val location = binding.etEditLocation.text?.toString()?.trim() ?: ""
+        if (location.isEmpty()) {
+            Toast.makeText(requireContext(), "Enter event location", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+
+        val isUpcoming = binding.switchEditUpcoming.isChecked
+
+        // Check at least one image (existing or new)
+        val totalImagesCount = existingImages.size + newImageUris.size - imagesToDelete.size
+        if (totalImagesCount <= 0) {
+            Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // disable UI while processing
+        binding.btnPickMoreImages.isEnabled = false
+        binding.btnUpdate.isEnabled = false
+
+        lifecycleScope.launchWhenStarted {
+            try {
+                // 1) upload new images
+                val uploadedNewImages = if (newImageUris.isNotEmpty()) {
+                    if (uploadUrl.isNullOrBlank()) throw Exception("Upload URL not available")
+                    uploadNewImages(newImageUris)
+                } else emptyList()
+
+                // 2) delete marked images
+                if (imagesToDelete.isNotEmpty()) {
+                    if (deleteUrl.isNullOrBlank()) throw Exception("Delete URL not available")
+                    val ok = deleteMarkedImages(imagesToDelete.toList())
+                    if (!ok) throw Exception("Failed to delete some images")
+                    // remove them locally from existingImages (already removed when user tapped delete, but ensure consistency)
+                    existingImages.removeAll { imagesToDelete.contains(it["public_id"]) }
+                    imagesToDelete.clear()
+                }
+
+                // 3) final images
+                val finalImages = mutableListOf<Map<String, String>>()
+                finalImages.addAll(existingImages.map { mapOf("url" to it["url"]!!, "public_id" to it["public_id"]!!) })
+                finalImages.addAll(uploadedNewImages)
+
+                // 4) update Firestore
+                val updateMap = hashMapOf<String, Any?>(
+                    "title" to title,
+                    "event_type" to eventType,
+                    "descriptions" to descriptions,
+                    "date" to date,
+                    "time" to time,
+                    "duration_minutes" to durationMinutes,
+                    "location" to location,
+                    "is_upcoming" to isUpcoming,
+                    "images" to finalImages
+                )
+
+                val docId = docIdArg
+                if (docId.isNullOrBlank()) throw Exception("No document id to update")
+
+                db.collection("users").document(docId).update(updateMap)
+                    .addOnSuccessListener {
+                        Toast.makeText(requireContext(), "Updated", Toast.LENGTH_SHORT).show()
+                        // reflect new state
+                        newImageUris.clear()
+                        existingImages.clear()
+                        existingImages.addAll(finalImages.map { mutableMapOf("url" to it["url"]!!, "public_id" to it["public_id"]!!) })
+                        renderImages()
+                        originalPrimaryText = descriptions["primary"] ?: ""
+                    }
+                    .addOnFailureListener { ex ->
+                        Toast.makeText(requireContext(), "Update failed: ${ex.message}", Toast.LENGTH_LONG).show()
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                binding.btnPickMoreImages.isEnabled = true
+                binding.btnUpdate.isEnabled = true
+            }
+        }
+    }
+
+    // -----------------------
+    // Translation: only run if primary text changed from originalPrimaryText
+    // -----------------------
+    private fun setupPrimaryTranslationWatcher() {
+        binding.etEditDescriptionPrimary.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+
+                if (isInitializing) return
+
+                translationJob?.cancel()
+                val currentText = s?.toString() ?: ""
+
+                // clear translations for empty text
+                if (currentText.trim().isEmpty()) {
+                    binding.etEditDescriptionSecondary.setText("")
+                    binding.etEditDescriptionTertiary.setText("")
+                    return
+                }
+
+                // If text equals originally loaded text, skip auto-translate (user didn't change)
+                if (currentText.trim() == originalPrimaryText.trim()) {
+                    // do nothing: keep stored secondary/tertiary as-is
+                    return
+                }
+
+                translationJob = lifecycleScope.launch {
+                    try {
+                        delay(3000) // debounce
+
+                        val zUrl = zuluUrl
+                        val aUrl = afrikaansUrl
+                        val apiKey = apiKeyForTranslate
+
+                        if (zUrl.isNullOrBlank() || aUrl.isNullOrBlank()) {
+                            // endpoints missing: skip automatic translation
+                            return@launch
+                        }
+                        if (apiKey.isNullOrBlank()) {
+                            // API key missing: inform user once
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(requireContext(), "Translate API key missing (check Remote Config)", Toast.LENGTH_SHORT).show()
+                            }
+                            return@launch
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            binding.pbEditSecondaryTranslate.visibility = View.VISIBLE
+                            binding.pbEditTertiaryTranslate.visibility = View.VISIBLE
+                            binding.etEditDescriptionSecondary.setText("Translating...")
+                            binding.etEditDescriptionTertiary.setText("Translating...")
+                        }
+
+                        val zuluDeferred = async(Dispatchers.IO) {
+                            TranslationHelper.translateText(currentText, zUrl, apiKey)
+                        }
+                        val afrDeferred = async(Dispatchers.IO) {
+                            TranslationHelper.translateText(currentText, aUrl, apiKey)
+                        }
+
+                        val zuluResult = try { zuluDeferred.await() } catch (_: Exception) { null }
+                        val afrResult = try { afrDeferred.await() } catch (_: Exception) { null }
+
+                        withContext(Dispatchers.Main) {
+                            if (zuluResult != null) binding.etEditDescriptionSecondary.setText(zuluResult) else binding.etEditDescriptionSecondary.setText("")
+                            if (afrResult != null) binding.etEditDescriptionTertiary.setText(afrResult) else binding.etEditDescriptionTertiary.setText("")
+                        }
+                    } catch (ex: CancellationException) {
+                        withContext(Dispatchers.Main) {
+                            binding.pbEditSecondaryTranslate.visibility = View.GONE
+                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                        }
+                        throw ex
+                    } catch (ex: Exception) {
+                        withContext(Dispatchers.Main) {
+                            binding.pbEditSecondaryTranslate.visibility = View.GONE
+                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                        }
+                    } finally {
+                        withContext(Dispatchers.Main) {
+                            binding.pbEditSecondaryTranslate.visibility = View.GONE
+                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                        }
+                    }
+                }
+            }
+
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
+    // -----------------------
+    // Utilities
+    // -----------------------
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        translationJob?.cancel()
+        _binding = null
+    }
 }

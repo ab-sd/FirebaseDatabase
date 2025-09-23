@@ -100,6 +100,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             // Update adapter & count
             imageAdapter.submitList(selectedImageUris.toList())
             binding.tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
+            updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
         }
 
     // --- TRANSLATION ---
@@ -167,6 +168,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 selectedImageUris.removeAt(pos)
                 if (pos < uploadedImages.size) uploadedImages.removeAt(pos)
                 imageAdapter.submitList(selectedImageUris.toList())
+                updateImageCountUI(tvImagesCount, btnPick)
                 tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
             }
         })
@@ -275,22 +277,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         val currentAfrUrl = afrikaansUrl
                         val currentApiKey = apiKeyForTranslate
 
-                        // ensure endpoints exist
-                        if (currentZuluUrl.isNullOrBlank() || currentAfrUrl.isNullOrBlank()) {
-                            Log.w("AddUserFragment", "Translation endpoints not configured — skipping auto-translate")
-                            return@launch
-                        }
-
-                        // API key is required by your backend; if missing, stop and warn
+                        if (currentZuluUrl.isNullOrBlank() || currentAfrUrl.isNullOrBlank()) return@launch
                         if (currentApiKey.isNullOrBlank()) {
-                            Log.w("AddUserFragment", "Translate API key missing — cannot proceed with automatic translations")
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(requireContext(), "Translate API key missing (check Remote Config)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(requireContext(), "Translate API key missing", Toast.LENGTH_SHORT).show()
                             }
                             return@launch
                         }
 
-                        // show progress placeholders immediately on main thread
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.VISIBLE
                             pbTertiary.visibility = View.VISIBLE
@@ -298,48 +292,62 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                             etDescTertiary.setText("Translating...")
                         }
 
-                        // Kick off both translations concurrently using TranslationHelper
-                        val zuluDeferred = async(Dispatchers.IO) {
-                            TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
-                        }
-                        val afDeferred = async(Dispatchers.IO) {
-                            TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
-                        }
+                        val results = try {
+                            // Kick off translations concurrently
+                            val zuluDeferred = async(Dispatchers.IO) {
+                                TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
+                            }
+                            val afDeferred = async(Dispatchers.IO) {
+                                TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
+                            }
 
-                        // await results (exceptions will bubble to the catch)
-                        val zuluResult = try { zuluDeferred.await() } catch (e: Exception) { null }
-                        val afResult = try { afDeferred.await() } catch (e: Exception) { null }
+                            // Await both results, catching exceptions individually
+                            val zuluResult = try { zuluDeferred.await() } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(requireContext(), "Zulu translation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                                null
+                            }
+
+                            val afResult = try { afDeferred.await() } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(requireContext(), "Afrikaans translation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                                null
+                            }
+
+                            zuluResult to afResult
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(requireContext(), "Translation request error: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                            null to null
+                        }
 
                         withContext(Dispatchers.Main) {
-                            if (zuluResult != null) etDescSecondary.setText(zuluResult) else etDescSecondary.setText("")
-                            if (afResult != null) etDescTertiary.setText(afResult) else etDescTertiary.setText("")
+                            etDescSecondary.setText(results.first ?: "")
+                            etDescTertiary.setText(results.second ?: "")
                         }
+
                     } catch (ex: CancellationException) {
-                        // user kept typing; ignore but ensure UI reset
-                        Log.d("AddUserFragment", "Translation job cancelled")
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.GONE
                             pbTertiary.visibility = View.GONE
                         }
                         throw ex
-                    } catch (ex: Exception) {
-                        Log.w("AddUserFragment", "Translation job failed", ex)
-                        withContext(Dispatchers.Main) {
-                            pbSecondary.visibility = View.GONE
-                            pbTertiary.visibility = View.GONE
-                        }
                     } finally {
-                        // ALWAYS hide progress bars after everything (success, failure or cancellation)
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.GONE
                             pbTertiary.visibility = View.GONE
                         }
                     }
                 }
+
             }
 
             override fun afterTextChanged(s: Editable?) {}
         })
+
 
         // Verify links - open Google Translate with primary text
         val tvVerifySecondary = requireView().findViewById<TextView>(R.id.tv_verify_secondary)
@@ -435,44 +443,53 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             scrollToView(binding.scrollView, btnSave, dpToPx(12))
 
             val title = etTitle.text?.toString()?.trim() ?: ""
-            if (title.isEmpty()) {
-                Toast.makeText(requireContext(), "Enter event title", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
             val eventType = spinnerType.selectedItem?.toString() ?: "Other"
-
             // collect descriptions
             val descPrimaryTxt = etDescPrimary.text?.toString()?.trim() ?: ""
             val descSecondaryTxt = etDescSecondary.text?.toString()?.trim() ?: ""
             val descTertiaryTxt = etDescTertiary.text?.toString()?.trim() ?: ""
-            val descriptions = mutableMapOf<String, String>()
-            if (descPrimaryTxt.isNotEmpty()) descriptions["primary"] = descPrimaryTxt
-            if (descSecondaryTxt.isNotEmpty()) descriptions["secondary"] = descSecondaryTxt
-            if (descTertiaryTxt.isNotEmpty()) descriptions["tertiary"] = descTertiaryTxt
-
             val date = tvDate.text?.toString()?.trim() ?: ""
-            if (date.isEmpty()) {
+            val time = tvTime.text?.toString()?.trim() ?: ""
+            val location = etLocation.text?.toString()?.trim() ?: ""
+            val durationMinutes = etDuration.text?.toString()?.toIntOrNull()
+            val isUpcoming = switchUpcoming.isChecked
+
+            if (title.isEmpty() || descPrimaryTxt.isEmpty() || descSecondaryTxt.isEmpty() || descTertiaryTxt.isEmpty() || location.isEmpty()
+            ) {
+                Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val descriptions = mutableMapOf<String, String>().apply {
+                if (descPrimaryTxt.isNotEmpty()) put("primary", descPrimaryTxt)
+                if (descSecondaryTxt.isNotEmpty()) put("secondary", descSecondaryTxt)
+                if (descTertiaryTxt.isNotEmpty()) put("tertiary", descTertiaryTxt)
+            }
+
+
+            if (date.isEmpty() || date == "Select date") {
                 Toast.makeText(requireContext(), "Select event date", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val time = tvTime.text?.toString()?.trim() ?: ""
-            if (time.isEmpty()) {
+            if (time.isEmpty() || time == "Select time") {
                 Toast.makeText(requireContext(), "Select event time", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val durationMinutes = etDuration.text?.toString()?.toIntOrNull()
-            val location = etLocation.text?.toString()?.trim()
-            val isUpcoming = switchUpcoming.isChecked
+            if (durationMinutes == null) {
+                Toast.makeText(requireContext(), "Enter a valid duration", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
+            // Require at least one image
+            if (selectedImageUris.isEmpty()) {
+                Toast.makeText(requireContext(), "Please select at least one image", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // If some images selected but not uploaded yet
             if (selectedImageUris.size != uploadedImages.size) {
-                if (selectedImageUris.isEmpty()) {
-                    saveUser(title, eventType, descriptions, date, time, durationMinutes, location, isUpcoming)
-                    return@setOnClickListener
-                }
-
                 if (imageUploadUrl.isNullOrEmpty()) {
                     Toast.makeText(requireContext(), "Backend URL not loaded", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
@@ -494,7 +511,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                             onProgress = { key, visible ->
                                 val idx = key.toIntOrNull()
                                 if (idx != null) {
-                                    // ensure UI update happens on main thread
+                                    // ensure UI updat happens on main thread
                                     lifecycleScope.launch {
                                         imageAdapter.setUploading(idx, visible)
                                     }
@@ -525,8 +542,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         descriptions: Map<String, String>,
         date: String,
         time: String,
-        durationMinutes: Int?,
-        location: String?,
+        durationMinutes: Int,
+        location: String,
         isUpcoming: Boolean
     ) {
         val event = hashMapOf<String, Any?>(
@@ -572,7 +589,13 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         return (dp * resources.displayMetrics.density).toInt()
     }
 
-    // updateSelectedUI removed on purpose — RecyclerView + adapter now handle all view work
+
+    fun updateImageCountUI(tv: TextView, btnPick: Button) {
+        tv.text = "${selectedImageUris.size} / 10 images selected"
+        btnPick.isEnabled = selectedImageUris.size < 10
+    }
+
+
 
     override fun onDestroyView() {
         super.onDestroyView()

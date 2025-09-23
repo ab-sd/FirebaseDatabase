@@ -74,8 +74,6 @@ dependencies {
 
     implementation ("com.google.firebase:firebase-config-ktx")
 
-
-
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

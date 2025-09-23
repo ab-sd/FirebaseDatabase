@@ -1,92 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:padding="8dp"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <!-- Top row: Title + expand icon -->
+    <!-- Card container -->
     <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:id="@+id/tv_name"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:text="Event Title" />
-
-        <ImageView
-            android:id="@+id/iv_expand"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@android:drawable/arrow_down_float"
-            android:contentDescription="expand" />
-    </LinearLayout>
-
-    <!-- Collapsed summary: description + date/time (always visible) -->
-    <TextView
-        android:id="@+id/tv_summary"
-        android:layout_marginTop="6dp"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Short description and date/time"
-        android:textColor="#333333" />
-
-    <!-- Expandable details -->
-    <LinearLayout
-        android:id="@+id/ll_details"
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:visibility="gone"
-        android:paddingTop="8dp">
+        android:background="@drawable/bg_card"
+        android:elevation="4dp"
+        android:padding="0dp">
 
-        <!-- Detailed metadata -->
-        <TextView
-            android:id="@+id/tv_details"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Type, Location, Duration, Status"
-            android:textColor="#555555" />
-
-        <HorizontalScrollView
-            android:layout_marginTop="8dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <LinearLayout
-                android:id="@+id/ll_images"
-                android:orientation="horizontal"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent" />
-        </HorizontalScrollView>
-
-        <!-- Edit + Delete -->
+        <!-- Header row: Title + expand -->
         <LinearLayout
+            android:orientation="horizontal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
-            android:layout_marginTop="8dp">
+            android:gravity="center_vertical"
+            android:background="#FFC107"
+            android:padding="12dp">
 
-            <Button
-                android:id="@+id/btn_edit"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/tv_name"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:text="Edit" />
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:gravity="center"
+                android:text="Event Title" />
 
-            <Button
-                android:id="@+id/btn_delete"
-                android:layout_width="wrap_content"
+            <ImageView
+                android:id="@+id/iv_expand"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@android:drawable/arrow_down_float"
+                android:contentDescription="expand"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <!-- Collapsed summary -->
+        <TextView
+            android:id="@+id/tv_summary"
+            android:layout_margin="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Short description and date/time"
+            android:textColor="#333333"
+            android:textSize="14sp" />
+
+        <!-- Expandable details -->
+        <LinearLayout
+            android:id="@+id/ll_details"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:padding="12dp">
+
+            <!-- Metadata neatly styled -->
+            <TextView
+                android:id="@+id/tv_details"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Delete"
-                android:layout_marginStart="8dp"/>
+                android:text="Type, Location, Duration, Status"
+                android:textColor="#555555"
+                android:textSize="14sp" />
+
+            <!-- Date and Time row -->
+            <LinearLayout
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <TextView
+                    android:id="@+id/tv_date"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="Date: 2025-09-23"
+                    android:textColor="#5D4037"
+                    android:padding="6dp"
+                    android:background="#FFF8E1"
+                    android:gravity="center" />
+
+                <TextView
+                    android:id="@+id/tv_time"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="Time: 10:30 AM"
+                    android:textColor="#5D4037"
+                    android:padding="6dp"
+                    android:background="#FFF8E1"
+                    android:gravity="center"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <!-- Image gallery -->
+            <HorizontalScrollView
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/ll_images"
+                    android:orientation="horizontal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent" />
+            </HorizontalScrollView>
+
+            <!-- Edit + Delete buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end"
+                android:layout_marginTop="12dp">
+
+                <Button
+                    android:id="@+id/btn_edit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Edit"
+                    android:backgroundTint="#FFB300"
+                    android:textColor="@android:color/white" />
+
+                <Button
+                    android:id="@+id/btn_delete"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Delete"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@android:color/holo_red_dark"
+                    android:textColor="@android:color/white" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 
@@ -96,5 +151,4 @@
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="#22000000"/>
-
 </LinearLayout>
