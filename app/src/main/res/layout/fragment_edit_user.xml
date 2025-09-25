@@ -247,25 +247,32 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Hide Upcoming Switch -->
+        <!-- Upcoming Switch (moved up & styled) -->
         <LinearLayout
-            android:visibility="gone"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="20dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:background="#FFF8E1">
+
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:text="Is Upcoming?" />
+                android:text="Is Upcoming?"
+                android:textColor="#F57F17"
+                android:textStyle="bold"
+                android:textSize="16sp" />
 
             <Switch
                 android:id="@+id/switch_edit_upcoming"
-                android:layout_marginStart="12dp"
-                android:checked="true"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:checked="true" />
         </LinearLayout>
+
 
         <!-- image pick + count -->
         <Button
@@ -296,6 +303,17 @@
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"/>
         </HorizontalScrollView>
+
+
+        <ProgressBar
+            android:id="@+id/pb_update"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:layout_marginTop="16dp"/>
+
 
         <!-- Save button -->
         <Button

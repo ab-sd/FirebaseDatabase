@@ -20,6 +20,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.example.basicfiredatabase.fragments.AddUserFragment
 import com.example.basicfiredatabase.fragments.AllUsersFragment
+import com.example.basicfiredatabase.fragments.EventsFragment
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -65,10 +66,11 @@ class MainActivity : AppCompatActivity() {
         // --- Fragment container padding for navigation bar ONLY (so fragments sit above nav bar) ---
         // Let the fragment's ScrollView handle navigation + IME insets (so we avoid mismatches).
         ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { v, insets ->
-            // Do not modify bottom here
-            v.setPadding(0, 0, 0, 0)
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            v.setPadding(navBars.left, 0, navBars.right, navBars.bottom)
             insets
         }
+
 
         // init firebase
         FirebaseApp.initializeApp(this)
@@ -97,7 +99,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 R.id.nav_view_users -> {
                     supportFragmentManager.beginTransaction()
-                        .replace(R.id.fragment_container, AllUsersFragment())
+                        .replace(R.id.fragment_container, EventsFragment())
                         .addToBackStack(null)
                         .commit()
                     drawerLayout.closeDrawer(GravityCompat.START)
@@ -118,43 +120,6 @@ class MainActivity : AppCompatActivity() {
         return handled || super.onOptionsItemSelected(item)
     }
 
-    // 🔵 New function to open Google Translate
-    private fun openGoogleTranslate() {
-        val originalText = "Hey, how are you doing? I am translating live using a redirect URL"
-        val encodedText = Uri.encode(originalText)
 
-        // --- 1) Try to open Google Translate app via ACTION_SEND ---
-        val translatePackage = "com.google.android.apps.translate"
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, originalText)
-            setPackage(translatePackage) // target Google Translate specifically
-        }
-
-        try {
-            // resolveActivity can be affected by package visibility on Android 11+
-            if (sendIntent.resolveActivity(packageManager) != null) {
-                startActivity(sendIntent)
-                return
-            } else {
-                Log.d("MainActivity", "Translate app not installed or not visible to package queries")
-            }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error while trying to open Translate app", e)
-            // continue to fallback
-        }
-
-        // --- 2) Fallback: open Translate web with prefilled text (opens browser or any handler) ---
-        val webUrl = "https://translate.google.com/?sl=auto&tl=af&text=$encodedText&op=translate"
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
-        val chooser = Intent.createChooser(browserIntent, "Open translation with")
-
-        try {
-            startActivity(chooser)
-        } catch (e: ActivityNotFoundException) {
-            Log.e("MainActivity", "No app found to open translation URL", e)
-            Toast.makeText(this, "No app available to open translation", Toast.LENGTH_SHORT).show()
-        }
-    }
 
 }

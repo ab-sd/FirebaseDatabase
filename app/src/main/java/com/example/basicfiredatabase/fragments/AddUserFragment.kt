@@ -44,13 +44,10 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
+
+
     private var _binding: FragmentAddUserBinding? = null
     private val binding get() = _binding!!
-
-    // handling screen size preventing overlay
-    private var lastImeHeight = 0
-    private var lastNavHeight = 0
-    private var currentFocusedView: View? = null
 
     private lateinit var imageAdapter: ImageListAdapter
 
@@ -528,6 +525,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     } finally {
                         btnPick.isEnabled = true
                         btnSave.isEnabled = true
+
                     }
                 }
             } else {
@@ -558,6 +556,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             "is_upcoming" to isUpcoming
         )
 
+        binding.pbSave.visibility = View.VISIBLE
+
         db.collection("users")
             .add(event)
             .addOnSuccessListener { docRef ->
@@ -579,15 +579,17 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 uploadedImages.clear()
                 imageAdapter.submitList(emptyList())
                 binding.tvImagesCount.text = "No images selected"
+
+                parentFragmentManager.popBackStack()
             }
             .addOnFailureListener { e ->
                 Toast.makeText(requireContext(), "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
+
+                binding.pbSave.visibility = View.GONE
+
             }
     }
 
-    private fun dpToPx(dp: Int): Int {
-        return (dp * resources.displayMetrics.density).toInt()
-    }
 
 
     fun updateImageCountUI(tv: TextView, btnPick: Button) {

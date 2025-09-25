@@ -35,6 +35,8 @@ class UserAdapter(
         // Title
         b.tvName.text = user.title
 
+        b.tvEventType.text = user.eventType
+
         // Preferred language for description
         val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
@@ -44,14 +46,28 @@ class UserAdapter(
         val status = if (user.isUpcoming) "Upcoming" else "Completed"
         val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
         val locationText = user.location ?: "N/A"
-        val dateTime = listOf(user.date, user.time).filter { it.isNotBlank() }.joinToString(" ")
+        val dateText = user.date.ifBlank { "No date set" }
+        val timeText = user.time.ifBlank { "No time set" }
+
+        // Thumbnail (first image) - always visible in header (or hidden if none)
+        if (user.images.isNotEmpty()) {
+            b.ivThumbnail.visibility = View.VISIBLE
+            Glide.with(ctx)
+                .load(user.images[0].url)
+                .centerCrop()
+                .into(b.ivThumbnail)
+        } else {
+            b.ivThumbnail.visibility = View.GONE
+        }
+
+
 
         // COLLAPSED summary: description + date/time (always visible under title)
-        b.tvSummary.text = if (descToShow.isNotBlank()) "$descToShow\n$dateTime" else (dateTime.ifBlank { "No date/time set" })
-
+        b.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
+        b.tvDate.text = "Date: " + dateText
+        b.tvTime.text = "Time: " + timeText
         // EXPANDED details: Type, Location, Duration, Status
         b.tvDetails.text = buildString {
-            append("Type: ${user.eventType}\n")
             append("Location: $locationText\n")
             append("Duration: $durationText\n")
             append("Status: $status")

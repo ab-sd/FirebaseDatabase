@@ -88,14 +88,69 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             renderImages()
         }
 
+
+
+    // Track keyboard + nav bar height
+    private var lastImeHeight = 0
+    private var lastNavHeight = 0
+    private var currentFocusedView: View? = null
+
+    // Helper: scroll a child into visible area of ScrollView
+    private fun scrollToView(scrollView: ScrollView, view: View, extra: Int = 0) {
+        val rect = android.graphics.Rect()
+        view.getDrawingRect(rect)
+        scrollView.offsetDescendantRectToMyCoords(view, rect)
+        val visibleHeight = scrollView.height - lastImeHeight - lastNavHeight
+        val targetBottom = rect.bottom
+        val scrollY = targetBottom - (visibleHeight - extra)
+        if (scrollY > 0) {
+            scrollView.post { scrollView.smoothScrollTo(0, scrollY) }
+        } else {
+            scrollView.post {
+                scrollView.smoothScrollTo(0, maxOf(0, scrollView.scrollY - dpToPx(4)))
+            }
+        }
+    }
+
+
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentEditUserBinding.bind(view)
+
+
+
+        val focusableFields = listOf(
+            binding.etEditTitle,
+            binding.etEditDescriptionPrimary,
+            binding.etEditDescriptionSecondary,
+            binding.etEditDescriptionTertiary,
+            binding.etEditDuration,
+            binding.etEditLocation
+        )
+
+        for (field in focusableFields) {
+            field.setOnFocusChangeListener { v, hasFocus ->
+                if (hasFocus) {
+                    currentFocusedView = v
+                    v.postDelayed({ scrollToView(binding.scrollViewEdit, v, dpToPx(12)) }, 120)
+                }
+            }
+            field.setOnClickListener { v ->
+                currentFocusedView = v
+                v.post { scrollToView(binding.scrollViewEdit, v, dpToPx(12)) }
+            }
+        }
+
+
 
         // Window inset handling similar to AddUser
         ViewCompat.setOnApplyWindowInsetsListener(binding.scrollViewEdit) { v, insets ->
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            lastNavHeight = navBottom
+            lastImeHeight = imeBottom
+
             val extraGap = dpToPx(4)
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + extraGap)
 
@@ -107,8 +162,15 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     binding.btnUpdate.layoutParams = lp
                 }
             }
+
+            if (imeBottom > 0) {
+                currentFocusedView?.let { fv ->
+                    v.post { scrollToView(binding.scrollViewEdit, fv, dpToPx(12)) }
+                }
+            }
             insets
         }
+
 
         // Load remote config (upload/delete + translate endpoints)
         setupRemoteConfig()
@@ -592,7 +654,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         val isUpcoming = binding.switchEditUpcoming.isChecked
 
         // Check at least one image (existing or new)
-        val totalImagesCount = existingImages.size + newImageUris.size - imagesToDelete.size
+        val totalImagesCount = existingImages.size + newImageUris.size
         if (totalImagesCount <= 0) {
             Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
             return
@@ -601,6 +663,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         // disable UI while processing
         binding.btnPickMoreImages.isEnabled = false
         binding.btnUpdate.isEnabled = false
+        binding.pbUpdate.visibility = View.VISIBLE
 
         lifecycleScope.launchWhenStarted {
             try {
@@ -650,6 +713,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                         existingImages.addAll(finalImages.map { mutableMapOf("url" to it["url"]!!, "public_id" to it["public_id"]!!) })
                         renderImages()
                         originalPrimaryText = descriptions["primary"] ?: ""
+
+                        parentFragmentManager.popBackStack()
                     }
                     .addOnFailureListener { ex ->
                         Toast.makeText(requireContext(), "Update failed: ${ex.message}", Toast.LENGTH_LONG).show()
@@ -659,6 +724,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             } finally {
                 binding.btnPickMoreImages.isEnabled = true
                 binding.btnUpdate.isEnabled = true
+                binding.pbUpdate.visibility = View.GONE
             }
         }
     }
