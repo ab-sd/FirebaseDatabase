@@ -20,12 +20,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.ImageListAdapter
 import com.example.basicfiredatabase.databinding.FragmentAddUserBinding
 import com.example.basicfiredatabase.utils.ImageUploadService
 import com.example.basicfiredatabase.utils.TranslationHelper
 import com.example.basicfiredatabase.utils.TranslationHelper.pasteFromClipboard
+import com.example.basicfiredatabase.utils.HorizontalSpaceItemDecoration
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -44,79 +46,108 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
-
-
     private var _binding: FragmentAddUserBinding? = null
     private val binding get() = _binding!!
 
     private lateinit var imageAdapter: ImageListAdapter
-
     private val db by lazy { Firebase.firestore }
 
     // selections and uploaded results
     private val selectedImageUris = mutableListOf<Uri>()
     private val uploadedImages = mutableListOf<Map<String, String>>() // url + public_id
 
-    // firebase remote config
+    // remote config values
     private var imageUploadUrl: String? = null
     private var imageCloudApiKey: String? = null
     private var apiKeyForTranslate: String? = null
     private var zuluUrl: String? = null
     private var afrikaansUrl: String? = null
 
-    // pick multiple images
+    // translation debounce
+    private var translationJob: Job? = null
+
+    // image picker: delegates to handlePickedImages
     private val pickImagesLauncher =
         registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-            if (uris == null || uris.isEmpty()) return@registerForActivityResult
-
-            // Filter duplicates (don't re-add URIs already selected)
-            val newUnique = uris.filter { it !in selectedImageUris }
-
-            if (newUnique.isEmpty()) {
-                Toast.makeText(requireContext(), "Selected images already added", Toast.LENGTH_SHORT).show()
-                return@registerForActivityResult
-            }
-
-            // How many more can we add?
-            val remaining = 10 - selectedImageUris.size
-            if (remaining <= 0) {
-                Toast.makeText(requireContext(), "Maximum 10 images allowed", Toast.LENGTH_SHORT).show()
-                return@registerForActivityResult
-            }
-
-            val toAdd = newUnique.take(remaining)
-            selectedImageUris.addAll(toAdd)
-
-            // Inform user if we dropped some selected items
-            if (newUnique.size > toAdd.size) {
-                Toast.makeText(requireContext(),
-                    "Only ${toAdd.size} added — maximum 10 images allowed",
-                    Toast.LENGTH_SHORT).show()
-            }
-
-            // Update adapter & count
-            imageAdapter.submitList(selectedImageUris.toList())
-            binding.tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
-            updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
+            handlePickedImages(uris)
         }
-
-    // --- TRANSLATION ---
-    private var translationJob: Job? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentAddUserBinding.bind(view)
 
-        // Vars to track IME + nav bar sizes (local)
+        //Prevents state form being saved
+        binding.recyclerSelectedImages.isSaveEnabled = false
+
+
+        // --- high level orchestration only ---
+        setupRecycler()
+        setupPasteButtons()
+        setupSpinner()
+        setupFocusAndScrolling()
+        setupTranslationWatcher()
+        setupVerifyButtons(view)
+        setupRemoteConfig()
+        setupDateTimePickers()
+        setupPickAndSaveHandlers()
+
+        // initial UI
+        updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
+    }
+
+    private fun dpToPx(dp: Int) = (dp * resources.displayMetrics.density).toInt()
+
+
+    // -----------------------
+    // UI setup helpers
+    // -----------------------
+    private fun setupRecycler() {
+        val recycler = binding.recyclerSelectedImages
+        imageAdapter = ImageListAdapter(onRemove = { pos ->
+            if (pos in selectedImageUris.indices) {
+                selectedImageUris.removeAt(pos)
+                if (pos < uploadedImages.size) uploadedImages.removeAt(pos)
+                imageAdapter.submitList(selectedImageUris.toList())
+                updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
+            }
+        })
+        recycler.adapter = imageAdapter
+
+
+        // horizontal layout
+        val lm = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        recycler.layoutManager = lm
+        recycler.setHasFixedSize(true)
+
+        // padding + spacing
+        val pad = dpToPx(8)
+        recycler.setPadding(pad, pad, pad, pad)
+        recycler.clipToPadding = false
+        recycler.addItemDecoration(HorizontalSpaceItemDecoration(dpToPx(6)))
+    }
+
+    private fun setupPasteButtons() {
+        binding.btnPasteSecondary.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etDescriptionSecondary)
+        }
+        binding.btnPasteTertiary.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etDescriptionTertiary)
+        }
+    }
+
+    private fun setupSpinner() {
+        binding.spinnerEventType.adapter =
+            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, TYPES.toList())
+    }
+
+
+    private fun setupFocusAndScrolling() {
+        // local vars for scrolling
         var lastImeHeight = 0
         var lastNavHeight = 0
         var currentFocusedView: View? = null
 
-        fun dpToPx(dp: Int): Int {
-            return (dp * resources.displayMetrics.density).toInt()
-        }
 
-        // helper to scroll a child into visible area of ScrollView
         fun scrollToView(scrollView: ScrollView, view: View, extra: Int = 0) {
             val rect = android.graphics.Rect()
             view.getDrawingRect(rect)
@@ -133,62 +164,20 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
         }
 
-        // Ensure ScrollView stretches properly
+        // keep scrollview properties
         binding.scrollView.isFillViewport = true
         binding.scrollView.isFocusableInTouchMode = true
         binding.scrollView.clipToPadding = false
 
-        // Inputs
-        val etTitle = binding.etTitle
-        val spinnerType = binding.spinnerEventType
-        val etDescPrimary = binding.etDescriptionPrimary
-        val etDescSecondary = binding.etDescriptionSecondary
-        val etDescTertiary = binding.etDescriptionTertiary
-        val btnPasteSecondary = binding.btnPasteSecondary
-        val btnPasteTertiary = binding.btnPasteTertiary
-        val tvDate = binding.tvEventDate
-        val tvTime = binding.tvEventTime
-        val etDuration = binding.etDuration
-        val etLocation = binding.etLocation
-        val switchUpcoming = binding.switchUpcoming
-        val btnPick = binding.btnPickImages
-        val btnSave = binding.btnSave
-        val tvImagesCount = binding.tvImagesCount
-
-        val pbSecondary = binding.pbSecondaryTranslate
-        val pbTertiary = binding.pbTertiaryTranslate
-
-        // RecyclerView setup for images
-        val recycler = binding.recyclerSelectedImages
-        imageAdapter = ImageListAdapter(onRemove = { pos ->
-            if (pos in selectedImageUris.indices) {
-                selectedImageUris.removeAt(pos)
-                if (pos < uploadedImages.size) uploadedImages.removeAt(pos)
-                imageAdapter.submitList(selectedImageUris.toList())
-                updateImageCountUI(tvImagesCount, btnPick)
-                tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
-            }
-        })
-        recycler.adapter = imageAdapter
-        recycler.layoutManager = GridLayoutManager(requireContext(), 3)
-
-        btnPasteSecondary.setOnClickListener {
-            pasteFromClipboard(requireContext(), binding.etDescriptionSecondary)
-        }
-
-        btnPasteTertiary.setOnClickListener {
-            pasteFromClipboard(requireContext(), binding.etDescriptionTertiary)
-        }
-
-        // Focus listeners for bottom fields
         val focusableFields = listOf(
-            etTitle,
-            etDescPrimary,
-            etDescSecondary,
-            etDescTertiary,
-            etDuration,
-            etLocation
+            binding.etTitle,
+            binding.etDescriptionPrimary,
+            binding.etDescriptionSecondary,
+            binding.etDescriptionTertiary,
+            binding.etDuration,
+            binding.etLocation
         )
+
         for (field in focusableFields) {
             field.setOnFocusChangeListener { v, hasFocus ->
                 if (hasFocus) {
@@ -202,7 +191,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
         }
 
-        // Handle insets (IME + nav) on ScrollView
         ViewCompat.setOnApplyWindowInsetsListener(binding.scrollView) { v, insets ->
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
@@ -212,17 +200,15 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             val extraGap = dpToPx(4)
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + extraGap)
 
-            // Always give Save button margin above nav bar
-            val lp = btnSave.layoutParams
+            val lp = binding.btnSave.layoutParams
             if (lp is ViewGroup.MarginLayoutParams) {
                 val desiredBottomMargin = navBottom + dpToPx(6)
                 if (lp.bottomMargin != desiredBottomMargin) {
                     lp.bottomMargin = desiredBottomMargin
-                    btnSave.layoutParams = lp
+                    binding.btnSave.layoutParams = lp
                 }
             }
 
-            // If keyboard visible, ensure focused field is shown
             if (imeBottom > 0) {
                 currentFocusedView?.let { fv ->
                     v.post { scrollToView(binding.scrollView, fv, dpToPx(12)) }
@@ -230,50 +216,81 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
             insets
         }
+    }
 
-        // Spinner setup
-        val types = listOf(
-            "Community Feeding Program",
-            "Back-to-School Drive",
-            "Children’s Health and Wellness Fair",
-            "Sports and Recreation Day",
-            "Community Clean-Up and Beautification",
-            "Food and Hygiene Pack Distribution",
-            "Emergency Relief Fundraising Event"
-        )
-        spinnerType.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
+    // -----------------------
+    // Image picker handlers
+    // -----------------------
+    private fun handlePickedImages(uris: List<Uri>?) {
+        if (uris == null || uris.isEmpty()) return
 
-        // ALWAYS show all three description fields (user requested)
-        etDescPrimary.visibility = View.VISIBLE
-        etDescSecondary.visibility = View.VISIBLE
-        etDescTertiary.visibility = View.VISIBLE
+        // Filter duplicates (don't re-add URIs already selected)
+        val newUnique = uris.filter { it !in selectedImageUris }
+        if (newUnique.isEmpty()) {
+            Toast.makeText(requireContext(), "Selected images already added", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        // TextWatcher + debounce for translations
-        etDescPrimary.addTextChangedListener(object : TextWatcher {
+        // How many more can we add?
+        val remaining = 10 - selectedImageUris.size
+        if (remaining <= 0) {
+            Toast.makeText(requireContext(), "Maximum 10 images allowed", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val toAdd = newUnique.take(remaining)
+        selectedImageUris.addAll(toAdd)
+
+        // Inform user if we dropped some selected items
+        if (newUnique.size > toAdd.size) {
+            Toast.makeText(requireContext(),
+                "Only ${toAdd.size} added — maximum 10 images allowed",
+                Toast.LENGTH_SHORT).show()
+        }
+
+        imageAdapter.submitList(selectedImageUris.toList()) {
+            // run after DiffUtil commit — force RecyclerView to re-layout and redraw
+            binding.recyclerSelectedImages.post {
+                // Option A: force a full refresh (safe for <=10 items)
+                imageAdapter.notifyDataSetChanged()
+
+                // Optionally: ensure decorations/layout updated
+                binding.recyclerSelectedImages.invalidateItemDecorations()
+                binding.recyclerSelectedImages.requestLayout()
+            }
+        }
+        binding.tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
+        updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
+    }
+
+    // -----------------------
+    // Translations (debounced)
+    // -----------------------
+    private fun setupTranslationWatcher() {
+        val etPrimary = binding.etDescriptionPrimary
+        val pbSecondary = binding.pbSecondaryTranslate
+        val pbTertiary = binding.pbTertiaryTranslate
+        val etSecondary = binding.etDescriptionSecondary
+        val etTertiary = binding.etDescriptionTertiary
+
+        etPrimary.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun afterTextChanged(s: Editable?) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                // cancel previous pending translate job
                 translationJob?.cancel()
-
                 val currentText = s?.toString() ?: ""
-
-                // don't start a job for empty text; clear translations instead
                 if (currentText.trim().isEmpty()) {
-                    etDescSecondary.setText("")
-                    etDescTertiary.setText("")
+                    etSecondary.setText("")
+                    etTertiary.setText("")
                     return
                 }
 
-                // start a new job with debounce
                 translationJob = lifecycleScope.launch {
                     try {
                         delay(3000) // debounce
-
                         val currentZuluUrl = zuluUrl
                         val currentAfrUrl = afrikaansUrl
                         val currentApiKey = apiKeyForTranslate
-
                         if (currentZuluUrl.isNullOrBlank() || currentAfrUrl.isNullOrBlank()) return@launch
                         if (currentApiKey.isNullOrBlank()) {
                             withContext(Dispatchers.Main) {
@@ -281,57 +298,48 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                             }
                             return@launch
                         }
-
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.VISIBLE
                             pbTertiary.visibility = View.VISIBLE
-                            etDescSecondary.setText("Translating...")
-                            etDescTertiary.setText("Translating...")
+                            etSecondary.setText("Translating...")
+                            etTertiary.setText("Translating...")
                         }
 
-                        val results = try {
-                            // Kick off translations concurrently
-                            val zuluDeferred = async(Dispatchers.IO) {
-                                TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
-                            }
-                            val afDeferred = async(Dispatchers.IO) {
-                                TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
-                            }
+                        val zuluDeferred = async(Dispatchers.IO) {
+                            TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
+                        }
+                        val afDeferred = async(Dispatchers.IO) {
+                            TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
+                        }
 
-                            // Await both results, catching exceptions individually
-                            val zuluResult = try { zuluDeferred.await() } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(requireContext(), "Zulu translation failed: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                                null
-                            }
-
-                            val afResult = try { afDeferred.await() } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(requireContext(), "Afrikaans translation failed: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                                null
-                            }
-
-                            zuluResult to afResult
-                        } catch (e: Exception) {
+                        val zuluResult = try { zuluDeferred.await() } catch (e: Exception){
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(requireContext(), "Translation request error: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(requireContext(), "Zulu translation failed: ${e.message}", Toast.LENGTH_LONG).show()
                             }
-                            null to null
+                            null
+                        }
+
+                        val afrResult = try { afDeferred.await() } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(requireContext(), "Afrikaans translation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                            null
                         }
 
                         withContext(Dispatchers.Main) {
-                            etDescSecondary.setText(results.first ?: "")
-                            etDescTertiary.setText(results.second ?: "")
+                            etSecondary.setText(zuluResult ?: "")
+                            etTertiary.setText(afrResult ?: "")
                         }
-
                     } catch (ex: CancellationException) {
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.GONE
                             pbTertiary.visibility = View.GONE
                         }
                         throw ex
+                    } catch (ex: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(requireContext(), "Translation error: ${ex.message}", Toast.LENGTH_LONG).show()
+                        }
                     } finally {
                         withContext(Dispatchers.Main) {
                             pbSecondary.visibility = View.GONE
@@ -339,46 +347,23 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         }
                     }
                 }
-
             }
-
-            override fun afterTextChanged(s: Editable?) {}
         })
+    }
 
-
-        // Verify links - open Google Translate with primary text
-        val tvVerifySecondary = requireView().findViewById<TextView>(R.id.tv_verify_secondary)
-        val tvVerifyTertiary = requireView().findViewById<TextView>(R.id.tv_verify_tertiary)
-
-        tvVerifySecondary.setOnClickListener {
-            TranslationHelper.openGoogleTranslateFromPrimary(
-                this@AddUserFragment,
-                binding.etDescriptionPrimary.text?.toString().orEmpty(),
-                "zu"
-            )
-        }
-
-        tvVerifyTertiary.setOnClickListener {
-            TranslationHelper.openGoogleTranslateFromPrimary(
-                this@AddUserFragment,
-                binding.etDescriptionPrimary.text?.toString().orEmpty(),
-                "af"
-            )
-        }
-
-        // Remote Config setup
+    // -----------------------
+    // Remote Config
+    // -----------------------
+    private fun setupRemoteConfig() {
         val remoteConfig = Firebase.remoteConfig
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600
-        }
+        val configSettings = remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 }
         remoteConfig.setConfigSettingsAsync(configSettings)
 
-        // defaults
         remoteConfig.setDefaultsAsync(
             mapOf(
-                "uploadImage_url" to "https://cloudinaryserver.onrender.com/upload",
-                "translate_zulu_url" to "https://mymemoryserver.onrender.com/translate/zu",
-                "translate_afrikaans_url" to "https://mymemoryserver.onrender.com/translate/af"
+                "uploadImage_url" to " https://ic-api-holder.onrender.com/upload",
+                "translate_zulu_url" to " https://ic-api-holder.onrender.com/translate/zu",
+                "translate_afrikaans_url" to " https://ic-api-holder.onrender.com/translate/af"
             )
         )
 
@@ -387,153 +372,190 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 if (task.isSuccessful) {
                     imageUploadUrl = remoteConfig.getString("uploadImage_url")
                     imageCloudApiKey = remoteConfig.getString("cloud_api_key")
-
                     zuluUrl = remoteConfig.getString("translate_zulu_url")
                     afrikaansUrl = remoteConfig.getString("translate_afrikaans_url")
                     apiKeyForTranslate = remoteConfig.getString("translate_api_key")
-                    Log.d("AddUserFragment", "RemoteConfig loaded: zulu=${zuluUrl.takeIf { !it.isNullOrBlank() }}, af=${afrikaansUrl.takeIf { !it.isNullOrBlank() }}, apiKeyPresent=${!apiKeyForTranslate.isNullOrBlank()}")
-                    Toast.makeText(requireContext(), "Remote config loaded (translations ${if (!zuluUrl.isNullOrBlank() && !afrikaansUrl.isNullOrBlank()) "ready" else "missing endpoints"})", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Remote config loaded", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
-                    Log.w("AddUserFragment", "RemoteConfig fetch failed")
                 }
             }
+    }
 
-        // Date picker
-        tvDate.setOnClickListener {
+    // -----------------------
+    // Date/time pickers
+    // -----------------------
+    private fun setupDateTimePickers() {
+        binding.tvEventDate.setOnClickListener {
             val c = Calendar.getInstance()
             val dp = DatePickerDialog(
                 requireContext(),
                 { _, year, month, dayOfMonth ->
-                    val cal = Calendar.getInstance()
-                    cal.set(year, month, dayOfMonth)
+                    val cal = Calendar.getInstance().apply { set(year, month, dayOfMonth) }
                     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    tvDate.text = sdf.format(cal.time)
+                    binding.tvEventDate.text = sdf.format(cal.time)
                 },
-                c.get(Calendar.YEAR),
-                c.get(Calendar.MONTH),
-                c.get(Calendar.DAY_OF_MONTH)
+                c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)
             )
             dp.show()
         }
 
-        // Time picker
-        tvTime.setOnClickListener {
+        binding.tvEventTime.setOnClickListener {
             val c = Calendar.getInstance()
             val tp = TimePickerDialog(
                 requireContext(),
                 { _, hourOfDay, minute ->
-                    val formatted = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
-                    tvTime.text = formatted
+                    binding.tvEventTime.text = String.format(Locale.US, "%02d:%02d", hourOfDay, minute)
                 },
-                c.get(Calendar.HOUR_OF_DAY),
-                c.get(Calendar.MINUTE),
-                true
+                c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true
             )
             tp.show()
         }
+    }
 
-        btnPick.setOnClickListener { pickImagesLauncher.launch("image/*") }
+    //Focus on image being uploaded
+    private fun focusOnPosition(index: Int) {
+        val recycler = binding.recyclerSelectedImages
+        recycler.post {
+            val lm = recycler.layoutManager as? LinearLayoutManager ?: return@post
+            // item width must match the item xml width (160dp). Adjust if you change it.
+            val itemWidthPx = dpToPx(160)
+            val centerOffset = recycler.width / 2 - itemWidthPx / 2
+            // This will place the item roughly centered
+            lm.scrollToPositionWithOffset(index, centerOffset)
+        }
+    }
 
-        btnSave.setOnClickListener {
-            // Ensure button itself visible above keyboard
-            scrollToView(binding.scrollView, btnSave, dpToPx(12))
 
-            val title = etTitle.text?.toString()?.trim() ?: ""
-            val eventType = spinnerType.selectedItem?.toString() ?: "Other"
-            // collect descriptions
-            val descPrimaryTxt = etDescPrimary.text?.toString()?.trim() ?: ""
-            val descSecondaryTxt = etDescSecondary.text?.toString()?.trim() ?: ""
-            val descTertiaryTxt = etDescTertiary.text?.toString()?.trim() ?: ""
-            val date = tvDate.text?.toString()?.trim() ?: ""
-            val time = tvTime.text?.toString()?.trim() ?: ""
-            val location = etLocation.text?.toString()?.trim() ?: ""
-            val durationMinutes = etDuration.text?.toString()?.toIntOrNull()
-            val isUpcoming = switchUpcoming.isChecked
 
-            if (title.isEmpty() || descPrimaryTxt.isEmpty() || descSecondaryTxt.isEmpty() || descTertiaryTxt.isEmpty() || location.isEmpty()
-            ) {
+    // -----------------------
+    // Pick & Save button wiring
+    // -----------------------
+    private fun setupPickAndSaveHandlers() {
+        binding.btnPickImages.setOnClickListener { pickImagesLauncher.launch("image/*") }
+
+        binding.btnSave.setOnClickListener {
+
+            val title = binding.etTitle.text?.toString()?.trim() ?: ""
+            val eventType = binding.spinnerEventType.selectedItem?.toString() ?: "Other"
+            val descPrimaryTxt = binding.etDescriptionPrimary.text?.toString()?.trim() ?: ""
+            val descSecondaryTxt = binding.etDescriptionSecondary.text?.toString()?.trim() ?: ""
+            val descTertiaryTxt = binding.etDescriptionTertiary.text?.toString()?.trim() ?: ""
+            val date = binding.tvEventDate.text?.toString()?.trim() ?: ""
+            val time = binding.tvEventTime.text?.toString()?.trim() ?: ""
+            val location = binding.etLocation.text?.toString()?.trim() ?: ""
+            val durationMinutes = binding.etDuration.text?.toString()?.toIntOrNull()
+            val isUpcoming = binding.switchUpcoming.isChecked
+
+            if (title.isEmpty() || descPrimaryTxt.isEmpty() || descSecondaryTxt.isEmpty() || descTertiaryTxt.isEmpty() || location.isEmpty()) {
                 Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            val descriptions = mutableMapOf<String, String>().apply {
-                if (descPrimaryTxt.isNotEmpty()) put("primary", descPrimaryTxt)
-                if (descSecondaryTxt.isNotEmpty()) put("secondary", descSecondaryTxt)
-                if (descTertiaryTxt.isNotEmpty()) put("tertiary", descTertiaryTxt)
-            }
-
-
             if (date.isEmpty() || date == "Select date") {
                 Toast.makeText(requireContext(), "Select event date", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
             if (time.isEmpty() || time == "Select time") {
                 Toast.makeText(requireContext(), "Select event time", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
             if (durationMinutes == null) {
                 Toast.makeText(requireContext(), "Enter a valid duration", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            // Require at least one image
             if (selectedImageUris.isEmpty()) {
                 Toast.makeText(requireContext(), "Please select at least one image", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // If some images selected but not uploaded yet
-            if (selectedImageUris.size != uploadedImages.size) {
-                if (imageUploadUrl.isNullOrEmpty()) {
-                    Toast.makeText(requireContext(), "Backend URL not loaded", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
+            val descriptions = mutableMapOf<String, String>().apply {
+                put("primary", descPrimaryTxt)
+                put("secondary", descSecondaryTxt)
+                put("tertiary", descTertiaryTxt)
+            }
 
-                btnPick.isEnabled = false
-                btnSave.isEnabled = false
+            // launch upload-and-save flow
+            binding.btnPickImages.isEnabled = false
+            binding.btnSave.isEnabled = false
 
-                lifecycleScope.launchWhenStarted {
-                    try {
-                        // build pairs of (key, uri). key = index as string so we can map back to Int in onProgress
-                        val pairs = selectedImageUris.mapIndexed { idx, uri -> idx.toString() to uri }
-
-                        val result = ImageUploadService.uploadUris(
-                            requireContext(),
-                            pairs,
-                            imageUploadUrl!!,
-                            imageCloudApiKey!!,
-                            onProgress = { key, visible ->
-                                val idx = key.toIntOrNull()
-                                if (idx != null) {
-                                    // ensure UI updat happens on main thread
-                                    lifecycleScope.launch {
-                                        imageAdapter.setUploading(idx, visible)
-                                    }
-                                }
-                            }
-                        )
-
-                        // success -> store uploaded images and save
+            lifecycleScope.launchWhenStarted {
+                try {
+                    // ensure upload if needed
+                    if (selectedImageUris.size != uploadedImages.size) {
+                        if (imageUploadUrl.isNullOrEmpty()) {
+                            Toast.makeText(requireContext(), "Backend URL not loaded", Toast.LENGTH_SHORT).show()
+                            return@launchWhenStarted
+                        }
+                        val result = uploadSelectedImages { idx, visible ->
+                            // report per-image upload state to adapter on main
+                            lifecycleScope.launch {
+                                imageAdapter.setUploading(idx, visible)
+                                if (visible) {
+                                    focusOnPosition(idx) // scroll into view only when uploading starts
+                                }                            }
+                        }
                         uploadedImages.clear()
                         uploadedImages.addAll(result)
-                        saveUser(title, eventType, descriptions, date, time, durationMinutes, location, isUpcoming)
-                    } catch (e: Exception) {
-                        Toast.makeText(requireContext(), "Upload error: ${e.message}", Toast.LENGTH_LONG).show()
-                    } finally {
-                        btnPick.isEnabled = true
-                        btnSave.isEnabled = true
-
                     }
+
+                    // now save
+                    saveUser(
+                        title = title,
+                        eventType = eventType,
+                        descriptions = descriptions,
+                        date = date,
+                        time = time,
+                        durationMinutes = durationMinutes,
+                        location = location,
+                        isUpcoming = isUpcoming
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(requireContext(), "Upload error: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    binding.btnPickImages.isEnabled = true
+                    binding.btnSave.isEnabled = true
                 }
-            } else {
-                saveUser(title, eventType, descriptions, date, time, durationMinutes, location, isUpcoming)
             }
         }
-    } // end onViewCreated
+    }
 
+    // -----------------------
+    // Upload function (suspending)
+    // -----------------------
+    private suspend fun uploadSelectedImages(
+        onProgress: (idx: Int, visible: Boolean) -> Unit
+    ): List<Map<String, String>> {
+        val pairs = selectedImageUris.mapIndexed { idx, uri -> idx.toString() to uri }
+
+        return try {
+            ImageUploadService.uploadUris(
+                requireContext(),
+                pairs,
+                imageUploadUrl!!,
+                imageCloudApiKey ?: "",
+                onProgress = { key, visible ->
+                    val idx = key.toIntOrNull()
+                    if (idx != null) onProgress(idx, visible)
+                }
+            )
+        } catch (e: Exception) {
+            // Show a toast to let the user know
+            withContext(Dispatchers.Main) {
+                Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+            emptyList()
+        } finally {
+            // always clear spinners if anything went wrong
+            withContext(Dispatchers.Main) {
+                selectedImageUris.indices.forEach { onProgress(it, false) }
+            }
+        }
+    }
+
+
+    // -----------------------
+    // Save final event to Firestore
+    // -----------------------
     private fun saveUser(
         title: String,
         eventType: String,
@@ -563,7 +585,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             .addOnSuccessListener { docRef ->
                 Toast.makeText(requireContext(), "Saved (id=${docRef.id})", Toast.LENGTH_SHORT).show()
 
-                // reset UI fields
+                // reset UI
                 binding.etTitle.text?.clear()
                 binding.etDescriptionPrimary.text?.clear()
                 binding.etDescriptionSecondary.text?.clear()
@@ -574,7 +596,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 binding.etLocation.text?.clear()
                 binding.switchUpcoming.isChecked = true
 
-                // clear images and adapter
                 selectedImageUris.clear()
                 uploadedImages.clear()
                 imageAdapter.submitList(emptyList())
@@ -584,26 +605,54 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
             .addOnFailureListener { e ->
                 Toast.makeText(requireContext(), "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
-
                 binding.pbSave.visibility = View.GONE
-
             }
     }
 
-
-
     fun updateImageCountUI(tv: TextView, btnPick: Button) {
-        tv.text = "${selectedImageUris.size} / 10 images selected"
+        tv.text = if (selectedImageUris.isEmpty()) "No images selected" else "${selectedImageUris.size} / 10 images selected"
         btnPick.isEnabled = selectedImageUris.size < 10
     }
 
 
+    private fun setupVerifyButtons(view: View) {
+
+        binding.tvVerifySecondary.setOnClickListener {
+            TranslationHelper.openGoogleTranslateFromPrimary(
+                this@AddUserFragment,
+                binding.etDescriptionPrimary.text?.toString().orEmpty(),
+                "zu"
+            )
+        }
+
+        binding.tvVerifyTertiary.setOnClickListener {
+            TranslationHelper.openGoogleTranslateFromPrimary(
+                this@AddUserFragment,
+                binding.etDescriptionPrimary.text?.toString().orEmpty(),
+                "af"
+            )
+        }
+    }
+
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // avoid leaks
         binding.recyclerSelectedImages.adapter = null
         _binding = null
         translationJob?.cancel()
+        selectedImageUris.clear()
+        imageAdapter.submitList(emptyList())
+    }
+
+    companion object {
+        private val TYPES = arrayOf(
+            "Community Feeding Program",
+            "Back-to-School Drive",
+            "Children’s Health and Wellness Fair",
+            "Sports and Recreation Day",
+            "Community Clean-Up and Beautification",
+            "Food and Hygiene Pack Distribution",
+            "Emergency Relief Fundraising Event"
+        )
     }
 }

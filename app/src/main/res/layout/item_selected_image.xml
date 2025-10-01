@@ -24,7 +24,9 @@
         android:layout_width="32dp"
         android:layout_height="32dp"
         android:layout_gravity="top|end"
-        android:background="@null"
+        android:layout_margin="6dp"
+        android:background="@drawable/bg_circle_semi_transparent"
+        android:padding="6dp"
         android:src="@android:drawable/ic_menu_close_clear_cancel"
         android:contentDescription="@string/remove_image" />
 </FrameLayout>

@@ -74,6 +74,18 @@ dependencies {
 
     implementation ("com.google.firebase:firebase-config-ktx")
 
+    //Maps
+    // ✅ JSON parsing
+    implementation("org.json:json:20240303")
+
+    // MapLibre
+    implementation("org.maplibre.gl:android-sdk:11.13.0")
+
+//    Map Services
+    implementation("com.google.android.gms:play-services-maps:18.1.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
