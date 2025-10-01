@@ -99,6 +99,9 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         setupSpinner()
         setupPrimaryTranslationWatcher()
         setupPickAndUpdateHandlers()
+
+        setupMapLinkToggle()
+
         handleIncomingArguments()
         renderImages() // initial render (may be empty)
     }
@@ -164,6 +167,14 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             pasteFromClipboard(requireContext(), binding.etEditDescriptionTertiary)
         }
 
+        //maps
+        binding.btnPasteMapLinkEdit.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etEditMapLink)
+            // optional: request focus so keyboard appears if user wants to edit
+            binding.etEditMapLink.requestFocus()
+        }
+
+
         binding.tvVerifyEditSecondary.setOnClickListener {
             TranslationHelper.openGoogleTranslateFromPrimary(
                 this@EditUserFragment,
@@ -178,6 +189,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 "af"
             )
         }
+
     }
 
     private fun setupDateTimePickers() {
@@ -317,6 +329,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 val location = snapshot.getString("location") ?: ""
                 val isUpcoming = snapshot.getBoolean("is_upcoming") ?: true
 
+                val includeMapLink = snapshot.getBoolean("include_map_link") ?: false
+                val mapLink = snapshot.getString("map_link") ?: ""
+
+
                 // images
                 val imagesList = snapshot.get("images") as? List<Map<String, Any>>
                 existingImages.clear()
@@ -351,7 +367,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 binding.etEditDescriptionTertiary.setText(tertiary)
 
                 originalPrimaryText = primary
-                isInitializing = false
+
 
                 binding.tvEditDate.text = if (date.isNotBlank()) date else "Select date"
                 binding.tvEditTime.text = if (time.isNotBlank()) time else "Select time"
@@ -359,6 +375,17 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 binding.etEditLocation.setText(location)
                 binding.switchEditUpcoming.isChecked = isUpcoming
 
+                // NEW: map fields
+                binding.cbEditIncludeMap.isChecked = includeMapLink
+                if (includeMapLink) {
+                    binding.layoutEditMapLinkRow.visibility = View.VISIBLE
+                    binding.etEditMapLink.setText(mapLink)
+                } else {
+                    binding.layoutEditMapLinkRow.visibility = View.GONE
+                    binding.etEditMapLink.text?.clear()
+                }
+
+                isInitializing = false
                 renderImages()
             }
             .addOnFailureListener { ex ->
@@ -381,6 +408,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         val durationArg = args.getInt("duration_minutes", 0)
         val locationArg = args.getString("location") ?: ""
         val isUpcomingArg = args.getBoolean("is_upcoming", true)
+
+        // NEW: optional map args
+        val includeMapArg = args.getBoolean("include_map_link", false)
+        val mapLinkArg = args.getString("map_link") ?: ""
 
         @Suppress("UNCHECKED_CAST")
         val imgs = args.getSerializable("images") as? ArrayList<*>
@@ -417,6 +448,20 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         binding.etEditDuration.setText(if (durationArg > 0) durationArg.toString() else "")
         binding.etEditLocation.setText(locationArg)
         binding.switchEditUpcoming.isChecked = isUpcomingArg
+
+
+        // NEW: apply include-map and link from arguments
+        binding.cbEditIncludeMap.isChecked = includeMapArg
+        if (includeMapArg) {
+            binding.layoutEditMapLinkRow.visibility = View.VISIBLE
+            binding.etEditMapLink.setText(mapLinkArg)
+        } else {
+            binding.layoutEditMapLinkRow.visibility = View.GONE
+            binding.etEditMapLink.text?.clear()
+        }
+
+        isInitializing = false
+
     }
 
     private fun renderImages() {
@@ -633,6 +678,14 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             return
         }
 
+        // NEW: read map checkbox + link (no validation per your request)
+        val includeMapLink = binding.cbEditIncludeMap.isChecked
+        val mapLink: String? = if (includeMapLink) {
+            binding.etEditMapLink.text?.toString()?.trim().takeIf { !it.isNullOrEmpty() }
+        } else {
+            null
+        }
+
         val isUpcoming = binding.switchEditUpcoming.isChecked
 
         val totalImagesCount = existingImages.size + newImageUris.size
@@ -640,6 +693,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
             return
         }
+
 
         // disable UI while processing (do this immediately so user cannot change content)
         binding.btnPickMoreImages.isEnabled = false
@@ -693,7 +747,11 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     "duration_minutes" to durationMinutes,
                     "location" to location,
                     "is_upcoming" to isUpcoming,
-                    "images" to finalImages
+                    "images" to finalImages,
+
+                    // NEW fields:
+                    "include_map_link" to includeMapLink,
+                    "map_link" to mapLink // null if not provided
                 )
 
                 val docId = docIdArg
@@ -823,6 +881,22 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             }
         }
     }
+
+
+    private fun setupMapLinkToggle() {
+        binding.cbEditIncludeMap.setOnCheckedChangeListener { _, isChecked ->
+            // show/hide the entire row (input + paste + progress)
+            binding.layoutEditMapLinkRow.visibility = if (isChecked) View.VISIBLE else View.GONE
+
+            if (!isChecked) {
+                // clear input & hide progress when unchecked
+                binding.etEditMapLink.text?.clear()
+                binding.tilEditMapLink.error = null
+            }
+        }
+    }
+
+
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
