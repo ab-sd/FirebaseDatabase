@@ -235,21 +235,73 @@ android:dividerPadding="12dp">
 </com.google.android.material.textfield.TextInputLayout>
 
 <!-- Location -->
-<com.google.android.material.textfield.TextInputLayout
-    android:layout_marginTop="12dp"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    app:boxStrokeColor="#FBC02D"
-    app:hintTextColor="#F9A825">
-
-    <com.google.android.material.textfield.TextInputEditText
-        android:id="@+id/et_location"
-        android:hint="Enter the location"
+    <!-- Location -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/til_location"
+        android:layout_marginTop="12dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"/>
-</com.google.android.material.textfield.TextInputLayout>
+        android:layout_height="wrap_content"
+        app:boxStrokeColor="#FBC02D"
+        app:hintTextColor="#F9A825">
 
-<!-- Upcoming (hidden by default, always yes) -->
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_location"
+            android:hint="Enter the location"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Checkbox placed below location for more space -->
+    <CheckBox
+        android:id="@+id/cb_include_map"
+        android:layout_marginTop="8dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Include Google Maps link"
+        android:textColor="#F9A825"/>
+
+    <!-- Google Maps link input row (hidden until checkbox checked).
+         This is a horizontal row with the input, a paste button and a small progress bar. -->
+    <LinearLayout
+        android:id="@+id/layout_map_link_row"
+        android:layout_marginTop="8dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/til_map_link"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:boxStrokeColor="#FBC02D"
+            app:hintTextColor="#F9A825">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_map_link"
+                android:hint="Paste Google Maps share link (https://...)"
+                android:inputType="textUri"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <ImageButton
+            android:id="@+id/btn_paste_map_link"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_paste"
+            android:contentDescription="Paste map link"
+            android:layout_marginStart="8dp"
+            android:padding="8dp"
+            app:tint="#F9A825" />
+    </LinearLayout>
+
+
+
+    <!-- Upcoming (hidden by default, always yes) -->
 <Switch
     android:id="@+id/switch_upcoming"
     android:visibility="gone"

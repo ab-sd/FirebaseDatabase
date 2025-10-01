@@ -2,15 +2,12 @@ package com.example.basicfiredatabase.fragments
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
+
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
-import android.view.Gravity
+
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
@@ -19,7 +16,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.ImageListAdapter
@@ -28,7 +24,6 @@ import com.example.basicfiredatabase.utils.ImageUploadService
 import com.example.basicfiredatabase.utils.TranslationHelper
 import com.example.basicfiredatabase.utils.TranslationHelper.pasteFromClipboard
 import com.example.basicfiredatabase.utils.HorizontalSpaceItemDecoration
-import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.remoteconfig.ktx.remoteConfig
@@ -91,6 +86,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         setupDateTimePickers()
         setupPickAndSaveHandlers()
 
+        setupMapLinkToggle()
+
         // initial UI
         updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
     }
@@ -132,6 +129,11 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         }
         binding.btnPasteTertiary.setOnClickListener {
             pasteFromClipboard(requireContext(), binding.etDescriptionTertiary)
+        }
+
+        // Map-link paste button (works the same way as your other paste buttons)
+        binding.btnPasteMapLink.setOnClickListener {
+            pasteFromClipboard(requireContext(), binding.etMapLink)
         }
     }
 
@@ -447,6 +449,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             val durationMinutes = binding.etDuration.text?.toString()?.toIntOrNull()
             val isUpcoming = binding.switchUpcoming.isChecked
 
+            // map link data
+            val (includeMapLink, mapLink) = getMapLinkData()
+
             if (title.isEmpty() || descPrimaryTxt.isEmpty() || descSecondaryTxt.isEmpty() || descTertiaryTxt.isEmpty() || location.isEmpty()) {
                 Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -465,6 +470,11 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             }
             if (selectedImageUris.isEmpty()) {
                 Toast.makeText(requireContext(), "Please select at least one image", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (includeMapLink && mapLink.isNullOrEmpty()) {
+                Toast.makeText(requireContext(), "Please paste the Google Maps link or uncheck \"Include Google Maps link\"", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -507,7 +517,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         time = time,
                         durationMinutes = durationMinutes,
                         location = location,
-                        isUpcoming = isUpcoming
+                        isUpcoming = isUpcoming,
+                        includeMapLink = includeMapLink,
+                        mapLink = mapLink
                     )
                 } catch (e: Exception) {
                     Toast.makeText(requireContext(), "Upload error: ${e.message}", Toast.LENGTH_LONG).show()
@@ -564,7 +576,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         time: String,
         durationMinutes: Int,
         location: String,
-        isUpcoming: Boolean
+        isUpcoming: Boolean,
+        includeMapLink: Boolean,
+        mapLink: String?
     ) {
         val event = hashMapOf<String, Any?>(
             "title" to title,
@@ -575,7 +589,10 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             "duration_minutes" to durationMinutes,
             "images" to uploadedImages,
             "location" to location,
-            "is_upcoming" to isUpcoming
+            "is_upcoming" to isUpcoming,
+            // new fields:
+            "include_map_link" to includeMapLink,
+            "map_link" to mapLink
         )
 
         binding.pbSave.visibility = View.VISIBLE
@@ -595,6 +612,11 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 binding.etDuration.text?.clear()
                 binding.etLocation.text?.clear()
                 binding.switchUpcoming.isChecked = true
+
+                // reset map link UI
+                binding.cbIncludeMap.isChecked = false
+                binding.tilMapLink.visibility = View.GONE
+                binding.etMapLink.text?.clear()
 
                 selectedImageUris.clear()
                 uploadedImages.clear()
@@ -633,6 +655,35 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             )
         }
     }
+
+
+    private fun setupMapLinkToggle() {
+        // When checkbox toggles, show/hide the entire row (input + paste + progress)
+        binding.cbIncludeMap.setOnCheckedChangeListener { _, isChecked ->
+            binding.layoutMapLinkRow.visibility = if (isChecked) View.VISIBLE else View.GONE
+
+            if (!isChecked) {
+                // clear input and any previous error when user unchecks
+                binding.etMapLink.text?.clear()
+                binding.tilMapLink.error = null
+            }
+        }
+    }
+
+
+    /**
+     * Returns a pair: (includeMapLinkFlag, mapLinkOrNull)
+     * If the checkbox isn't checked, mapLinkOrNull is null.
+     * If checkbox checked but field empty, returns (true, null) — caller should validate.
+     */
+    private fun getMapLinkData(): Pair<Boolean, String?> {
+        val include = binding.cbIncludeMap.isChecked
+        val raw = binding.etMapLink.text?.toString()?.trim()
+        val link = if (!raw.isNullOrEmpty()) raw else null
+        return Pair(include, link)
+    }
+
+
 
 
     override fun onDestroyView() {

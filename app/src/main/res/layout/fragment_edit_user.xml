@@ -294,9 +294,12 @@
             android:textColor="#616161" />
 
         <HorizontalScrollView
+            android:id="@+id/hsv_edit_images"
             android:layout_marginTop="8dp"
             android:layout_width="match_parent"
-            android:layout_height="160dp">
+            android:layout_height="160dp"
+            android:fillViewport="false"
+            android:scrollbars="none">
             <LinearLayout
                 android:id="@+id/ll_edit_images"
                 android:orientation="horizontal"
