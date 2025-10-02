@@ -115,14 +115,14 @@
             android:id="@+id/tv_verify_edit_secondary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Open in Google Translate"
+            android:text="Check isiZulu translation online"
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingTop="4dp"
             android:layout_marginStart="4dp"
             android:clickable="true"
             android:focusable="true"
-            android:textColor="#F57F17"
-            android:textStyle="bold" />
+            android:textColor="#0909EB"
+            android:textStyle="italic" />
 
         <!-- Description (tertiary) -->
         <TextView
@@ -177,14 +177,14 @@
             android:id="@+id/tv_verify_edit_tertiary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Open in Google Translate"
+            android:text="Check Afrikaans translation online"
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingTop="4dp"
             android:layout_marginStart="4dp"
             android:clickable="true"
             android:focusable="true"
-            android:textColor="#F57F17"
-            android:textStyle="bold" />
+            android:textColor="#0909EB"
+            android:textStyle="italic" />
 
         <!-- Date & Time -->
         <LinearLayout

@@ -34,6 +34,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -177,7 +178,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             binding.etDescriptionSecondary,
             binding.etDescriptionTertiary,
             binding.etDuration,
-            binding.etLocation
+            binding.etLocation,
+            binding.etMapLink
         )
 
         for (field in focusableFields) {
@@ -308,10 +310,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         }
 
                         val zuluDeferred = async(Dispatchers.IO) {
-                            TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
+                            withTimeoutOrNull(10_000) {
+                                TranslationHelper.translateText(currentText, currentZuluUrl!!, currentApiKey!!)
+                            }
                         }
                         val afDeferred = async(Dispatchers.IO) {
-                            TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
+                            withTimeoutOrNull(10_000) {
+                                TranslationHelper.translateText(currentText, currentAfrUrl!!, currentApiKey!!)
+                            }
                         }
 
                         val zuluResult = try { zuluDeferred.await() } catch (e: Exception){
@@ -329,8 +335,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         }
 
                         withContext(Dispatchers.Main) {
-                            etSecondary.setText(zuluResult ?: "")
-                            etTertiary.setText(afrResult ?: "")
+                            etSecondary.setText(zuluResult ?: "Translation timed out")
+                            etTertiary.setText(afrResult ?: "Translation timed out")
                         }
                     } catch (ex: CancellationException) {
                         withContext(Dispatchers.Main) {

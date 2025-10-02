@@ -116,7 +116,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             binding.etEditDescriptionSecondary,
             binding.etEditDescriptionTertiary,
             binding.etEditDuration,
-            binding.etEditLocation
+            binding.etEditLocation,
+            binding.etEditMapLink
         )
 
         for (field in focusableFields) {
@@ -831,15 +832,23 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                             binding.etEditDescriptionTertiary.setText("Translating...")
                         }
 
-                        val zuluDeferred = async(Dispatchers.IO) { TranslationHelper.translateText(currentText, zUrl, apiKey) }
-                        val afrDeferred = async(Dispatchers.IO) { TranslationHelper.translateText(currentText, aUrl, apiKey) }
+                        val zuluDeferred = async(Dispatchers.IO) {
+                            withTimeoutOrNull(10_000) {
+                                TranslationHelper.translateText(currentText, zUrl, apiKey)
+                            }
+                        }
+                        val afrDeferred = async(Dispatchers.IO) {
+                            withTimeoutOrNull(10_000) {
+                                TranslationHelper.translateText(currentText, aUrl, apiKey)
+                            }
+                        }
 
                         val zuluResult = try { zuluDeferred.await() } catch (_: Exception) { null }
                         val afrResult = try { afrDeferred.await() } catch (_: Exception) { null }
 
                         withContext(Dispatchers.Main) {
-                            binding.etEditDescriptionSecondary.setText(zuluResult ?: "")
-                            binding.etEditDescriptionTertiary.setText(afrResult ?: "")
+                            binding.etEditDescriptionSecondary.setText(zuluResult ?: "Translation timed out")
+                            binding.etEditDescriptionTertiary.setText(afrResult ?: "Translation timed out")
                         }
                     } catch (ex: CancellationException) {
                         withContext(Dispatchers.Main) {
