@@ -1,18 +1,24 @@
 package com.example.basicfiredatabase.adapters
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.Paint
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.databinding.ItemUserBinding
-import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.fragments.ImageViewerFragment
+import com.example.basicfiredatabase.models.User
 
 class UserAdapter(
     private val items: MutableList<User> = mutableListOf(),
@@ -20,66 +26,102 @@ class UserAdapter(
     private val onDelete: (User) -> Unit
 ) : RecyclerView.Adapter<UserAdapter.VH>() {
 
-    class VH(val binding: ItemUserBinding) : RecyclerView.ViewHolder(binding.root)
+    inner class VH(val binding: ItemUserBinding) : RecyclerView.ViewHolder(binding.root) {
+        private val ctx: Context get() = binding.root.context
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val binding = ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return VH(binding)
-    }
-
-    override fun onBindViewHolder(holder: VH, position: Int) {
-        val user = items[position]
-        val b = holder.binding
-        val ctx = holder.itemView.context
-
-        // Title
-        b.tvName.text = user.title
-
-        b.tvEventType.text = user.eventType
-
-        // Preferred language for description
-        val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
-        val descToShow = user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
-
-        // Meta fields
-        val status = if (user.isUpcoming) "Upcoming" else "Completed"
-        val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
-        val locationText = user.location ?: "N/A"
-        val dateText = user.date.ifBlank { "No date set" }
-        val timeText = user.time.ifBlank { "No time set" }
-
-        // Thumbnail (first image) - always visible in header (or hidden if none)
-        if (user.images.isNotEmpty()) {
-            b.ivThumbnail.visibility = View.VISIBLE
-            Glide.with(ctx)
-                .load(user.images[0].url)
-                .centerCrop()
-                .into(b.ivThumbnail)
-        } else {
-            b.ivThumbnail.visibility = View.GONE
+        fun bind(user: User, position: Int) {
+            bindHeader(user)
+            bindSummary(user)
+            bindDetails(user)
+            bindLocation(user)
+            bindImages(user)
+            bindActions(user, position)
         }
 
+        private fun bindHeader(user: User) {
+            binding.tvName.text = user.title
+            binding.tvEventType.text = user.eventType
 
-
-        // COLLAPSED summary: description + date/time (always visible under title)
-        b.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
-        b.tvDate.text = "Date: " + dateText
-        b.tvTime.text = "Time: " + timeText
-        // EXPANDED details: Type, Location, Duration, Status
-        b.tvDetails.text = buildString {
-            append("Location: $locationText\n")
-            append("Duration: $durationText\n")
-            append("Status: $status")
+            // Thumbnail (first image) - show/hide
+            if (user.images.isNotEmpty()) {
+                binding.ivThumbnail.visibility = View.VISIBLE
+                Glide.with(ctx)
+                    .load(user.images[0].url)
+                    .centerCrop()
+                    .into(binding.ivThumbnail)
+            } else {
+                binding.ivThumbnail.visibility = View.GONE
+            }
         }
 
-        // Expand/collapse UI
-        b.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
-        b.ivExpand.rotation = if (user.expanded) 180f else 0f
+        private fun bindSummary(user: User) {
+            // Preferred language for description
+            val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
+            val descToShow = user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
+            binding.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
 
-        // Images (only shown when expanded)
-        b.llImages.removeAllViews()
-        if (user.expanded && user.images.isNotEmpty()) {
+            val dateText = user.date.ifBlank { "No date set" }
+            val timeText = user.time.ifBlank { "No time set" }
+            binding.tvDate.text = "Date: $dateText"
+            binding.tvTime.text = "Time: $timeText"
+        }
+
+        private fun bindDetails(user: User) {
+            val status = if (user.isUpcoming) "Upcoming" else "Completed"
+            val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
+
+            // note: location moved to dedicated tv_location
+            binding.tvDetails.text = buildString {
+                append("Type: ${user.eventType}\n")
+                append("Duration: $durationText\n")
+                append("Status: $status")
+            }
+
+            binding.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
+            binding.ivExpand.rotation = if (user.expanded) 180f else 0f
+        }
+
+        private fun bindLocation(user: User) {
+            val tvLocation: TextView? = binding.root.findViewById(R.id.tv_location)
+            val locationText = user.location ?: "N/A"
+
+            tvLocation?.let { tv ->
+                tv.text = locationText
+
+                // Reset state (important for recycling)
+                tv.setOnClickListener(null)
+                tv.isClickable = false
+                tv.isFocusable = false
+                tv.visibility = if (user.expanded) View.VISIBLE else View.GONE
+                tv.paintFlags = tv.paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
+                tv.setTextColor(ContextCompat.getColor(ctx, android.R.color.black))
+
+                // If there is a map link — make it look clickable and open it
+                if (!user.mapLink.isNullOrBlank()) {
+                    tv.paintFlags = tv.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+                    tv.setTextColor(ContextCompat.getColor(ctx, android.R.color.holo_blue_dark))
+                    tv.setOnClickListener {
+                        try {
+                            val uri = Uri.parse(user.mapLink)
+                            val intent = Intent(Intent.ACTION_VIEW, uri)
+                            ctx.startActivity(intent)
+                        } catch (ex: Exception) {
+                            Toast.makeText(ctx, "Unable to open link", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    tv.isClickable = true
+                    tv.isFocusable = true
+                }
+            }
+        }
+
+        private fun bindImages(user: User) {
+            // clear old image views
+            binding.llImages.removeAllViews()
+
+            if (!user.expanded || user.images.isEmpty()) return
+
             val sizePx = (ctx.resources.displayMetrics.density * 200).toInt()
             val margin = (ctx.resources.displayMetrics.density * 6).toInt()
 
@@ -104,21 +146,31 @@ class UserAdapter(
                         .commit()
                 }
 
-                b.llImages.addView(iv)
+                binding.llImages.addView(iv)
             }
         }
 
-        // Toggle expand/collapse when row is clicked
-        b.root.setOnClickListener {
-            user.expanded = !user.expanded
-            // animate arrow then rebind to refresh content
-            b.ivExpand.animate().rotation(if (user.expanded) 180f else 0f).setDuration(150).start()
-            notifyItemChanged(position)
-        }
+        private fun bindActions(user: User, position: Int) {
+            // Toggle expand/collapse when row is clicked
+            binding.root.setOnClickListener {
+                user.expanded = !user.expanded
+                binding.ivExpand.animate().rotation(if (user.expanded) 180f else 0f).setDuration(150).start()
+                // notifyItemChanged from adapter level (safe because VH is inner)
+                this@UserAdapter.notifyItemChanged(position)
+            }
 
-        // Edit / Delete callbacks
-        b.btnEdit.setOnClickListener { onEdit(user) }
-        b.btnDelete.setOnClickListener { onDelete(user) }
+            binding.btnEdit.setOnClickListener { onEdit(user) }
+            binding.btnDelete.setOnClickListener { onDelete(user) }
+        }
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        val binding = ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return VH(binding)
+    }
+
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        holder.bind(items[position], position)
     }
 
     override fun getItemCount(): Int = items.size

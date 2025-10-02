@@ -67,6 +67,11 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     putInt("duration_minutes", user.durationMinutes ?: 0)
                     putString("location", user.location)
                     putBoolean("is_upcoming", user.isUpcoming)
+
+                    // NEW: include map info so Edit fragment can populate it
+                    putBoolean("include_map_link", user.includeMapLink)
+                    putString("map_link", user.mapLink)
+
                 }
             }
 
@@ -171,6 +176,10 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         val time = doc.getString("time") ?: ""
                         val duration = doc.getLong("duration_minutes")?.toInt()
                         val location = doc.getString("location")
+
+                        val includeMap = doc.getBoolean("include_map_link") ?: false
+                        val mapLink = doc.getString("map_link")?.takeIf { it.isNotBlank() }
+
                         val isUpcoming = doc.getBoolean("is_upcoming") ?: true
 
                         val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
@@ -192,6 +201,10 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                             durationMinutes = duration,
                             images = images,
                             location = location,
+
+                            includeMapLink = includeMap,   // NEW
+                            mapLink = mapLink,
+
                             isUpcoming = isUpcoming
                         )
                     } catch (ex: Exception) {

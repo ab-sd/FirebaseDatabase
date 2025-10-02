@@ -10,6 +10,11 @@ data class User(
     val durationMinutes: Int? = null,
     val images: List<UserImage> = emptyList(),
     val location: String? = null,
+
+    // NEW: whether a map link was included and the actual link (nullable)
+    val includeMapLink: Boolean = false,
+    val mapLink: String? = null,
+
     val isUpcoming: Boolean = true,
     var expanded: Boolean = false
 )

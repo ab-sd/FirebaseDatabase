@@ -137,6 +137,17 @@
                 android:textColor="#555555"
                 android:textSize="14sp" />
 
+            <!-- Location: clickable when map link exists, plain text otherwise -->
+            <TextView
+                android:id="@+id/tv_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text=""
+                android:textSize="14sp"
+                android:textColor="#333333" />
+
+
             <!-- Image gallery -->
             <HorizontalScrollView
                 android:layout_marginTop="8dp"
