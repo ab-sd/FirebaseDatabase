@@ -1,6 +1,9 @@
 package com.example.basicfiredatabase.fragments
 
 import android.content.ContentValues.TAG
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -57,58 +60,77 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         binding.rvGallery.layoutManager = glm
         binding.rvGallery.adapter = adapter
 
-        loadPastEventsImages()
+        // ---- SwipeRefresh setup ----
+        // Ensure your fragment_gallery.xml wraps the RecyclerView in a SwipeRefreshLayout with id srl_gallery
+        binding.srlGallery.setColorSchemeResources(
+            R.color.teal_200,
+            android.R.color.holo_blue_light,
+            android.R.color.holo_orange_light
+        )
+
+        binding.srlGallery.setOnRefreshListener {
+            if (!isNetworkAvailable()) {
+                binding.srlGallery.isRefreshing = false
+                Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+            } else {
+                // use the callback to turn off spinner when done
+                loadPastEventsImages(onComplete = { if (isAdded) binding.srlGallery.isRefreshing = false })
+            }
+        }
+
+        // show spinner initially and load
+        binding.srlGallery.isRefreshing = true
+        loadPastEventsImages(onComplete = { if (isAdded) binding.srlGallery.isRefreshing = false })
     }
 
-    private fun loadPastEventsImages() {
+    /**
+     * Load past events (is_upcoming == false), try server-side ordering first.
+     * onComplete is invoked when the load finishes (success or failure) so caller can hide spinner.
+     */
+    private fun loadPastEventsImages(onComplete: (() -> Unit)? = null) {
         val fieldName = "is_upcoming"
-        // Try server-side ordering by date then time (newest first)
-        // Note: if Firestore requires a composite index you'll get an error and we fallback.
         val colRef = db.collection("users")
             .whereEqualTo(fieldName, false)
             .orderBy("date", Query.Direction.DESCENDING)
             .orderBy("time", Query.Direction.DESCENDING)
 
-        android.util.Log.d(TAG, "Loading past events: server-ordered query on $fieldName = false, ordered by date/time desc")
+        Log.d(TAG, "Loading past events: server-ordered query on $fieldName = false, ordered by date/time desc")
 
         colRef.get()
             .addOnSuccessListener { snaps ->
-                android.util.Log.d(TAG, "Server-ordered query succeeded. docs returned: ${snaps.size()}")
+                Log.d(TAG, "Server-ordered query succeeded. docs returned: ${snaps.size()}")
                 val galleryItems = buildGalleryItemsFromDocs(snaps.documents)
-                android.util.Log.d(TAG, "gallery items built: ${galleryItems.size}")
+                Log.d(TAG, "gallery items built: ${galleryItems.size}")
 
                 if (galleryItems.isEmpty()) {
-                    // No items — show empty state
                     binding.rvGallery.visibility = View.GONE
                     Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
                 } else {
                     binding.rvGallery.visibility = View.VISIBLE
                     adapter.submitList(galleryItems)
                 }
+                onComplete?.invoke()
             }
             .addOnFailureListener { e ->
-                // If Firestore asks for an index, the message usually contains 'index' or a link.
-                android.util.Log.w(TAG, "Server-ordered query failed, falling back to client-side sorting. Error: ${e.message}", e)
-                // fallback: fetch filtered docs (no order) then sort client-side
-                fetchAndSortClientSide()
+                Log.w(TAG, "Server-ordered query failed, falling back to client-side sorting. Error: ${e.message}", e)
+                // fallback path will call onComplete when it finishes
+                fetchAndSortClientSide(onComplete)
             }
     }
 
-    /** Fallback path: fetch whereEqualTo only, then do client-side sort (newest first) */
-    private fun fetchAndSortClientSide() {
+    /** Fallback: fetch whereEqualTo only, then sort client-side (newest first) */
+    private fun fetchAndSortClientSide(onComplete: (() -> Unit)? = null) {
         val fieldName = "is_upcoming"
-        android.util.Log.d(TAG, "FALLBACK: fetching docs with $fieldName = false and sorting client-side")
+        Log.d(TAG, "FALLBACK: fetching docs with $fieldName = false and sorting client-side")
 
         db.collection("users")
             .whereEqualTo(fieldName, false)
             .get()
             .addOnSuccessListener { snaps ->
-                android.util.Log.d(TAG, "Fallback query returned ${snaps.size()} docs")
+                Log.d(TAG, "Fallback query returned ${snaps.size()} docs")
                 val galleryItems = buildGalleryItemsFromDocs(snaps.documents)
-                // client-side sort: we already place headers/images in the same order as source docs,
-                // so we must re-order by their event datetime. We'll group by event and sort groups.
                 val ordered = orderGalleryItemsByEventDateDesc(galleryItems)
-                android.util.Log.d(TAG, "Fallback gallery items built (after sort): ${ordered.size}")
+                Log.d(TAG, "Fallback gallery items built (after sort): ${ordered.size}")
 
                 if (ordered.isEmpty()) {
                     binding.rvGallery.visibility = View.GONE
@@ -117,10 +139,12 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                     binding.rvGallery.visibility = View.VISIBLE
                     adapter.submitList(ordered)
                 }
+                onComplete?.invoke()
             }
             .addOnFailureListener { e ->
-                android.util.Log.e(TAG, "Fallback query failed", e)
+                Log.e(TAG, "Fallback query failed", e)
                 Toast.makeText(requireContext(), "Failed loading gallery: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                onComplete?.invoke()
             }
     }
 
@@ -148,7 +172,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                                 if (entry.isNotBlank()) images.add(entry)
                             }
                             else -> {
-                                android.util.Log.d(TAG, "doc $id entry has unexpected image entry type: ${entry?.javaClass}")
+                                Log.d(TAG, "doc $id entry has unexpected image entry type: ${entry?.javaClass}")
                             }
                         }
                     }
@@ -157,10 +181,10 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                     if (rawImages.isNotBlank()) images.add(rawImages)
                 }
                 null -> {
-                    android.util.Log.d(TAG, "doc $id has no images field")
+                    Log.d(TAG, "doc $id has no images field")
                 }
                 else -> {
-                    android.util.Log.d(TAG, "doc $id images field unexpected type: ${rawImages.javaClass}")
+                    Log.d(TAG, "doc $id images field unexpected type: ${rawImages.javaClass}")
                 }
             }
 
@@ -168,35 +192,25 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                 galleryItems.add(GalleryItem.Header(id, title, date))
                 for (url in images) galleryItems.add(GalleryItem.Image(id, url))
             } else {
-                android.util.Log.d(TAG, "doc $id has no valid image urls, skipping")
+                Log.d(TAG, "doc $id has no valid image urls, skipping")
             }
         }
 
         return galleryItems
     }
 
-    /** Order gallery items so events with newest datetime come first.
-     *  We detect header items, group images under the header's eventId, order groups by header date/time,
-     *  then flatten to a list of header+its images (desc by date/time).
-     */
+    /** Order gallery items so newest events come first (group by event, sort by header date desc) */
     private fun orderGalleryItemsByEventDateDesc(items: List<GalleryItem>): List<GalleryItem> {
-        // Map eventId -> pair(header, images)
         data class Group(val header: GalleryItem.Header, val images: MutableList<GalleryItem.Image> = mutableListOf())
 
         val groups = linkedMapOf<String, Group>()
-        var currentHeaderId: String? = null
 
-        // First pass: group items in the original sequence
         for (it in items) {
             when (it) {
-                is GalleryItem.Header -> {
-                    groups[it.eventId] = Group(it)
-                    currentHeaderId = it.eventId
-                }
+                is GalleryItem.Header -> groups[it.eventId] = Group(it)
                 is GalleryItem.Image -> {
                     val gid = it.eventId
                     val g = groups[gid] ?: run {
-                        // If there's an image without header (shouldn't happen), create a minimal header
                         val fakeHeader = GalleryItem.Header(gid, "No title", "")
                         val newG = Group(fakeHeader)
                         groups[gid] = newG
@@ -207,11 +221,9 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
             }
         }
 
-        // Sort groups by header date/time descending
         val sortedGroups = groups.values.sortedWith { a, b ->
             val aDate = parseDateTimeForSort(a.header.date)
             val bDate = parseDateTimeForSort(b.header.date)
-            // descending
             when {
                 aDate == bDate -> 0
                 aDate < bDate -> 1
@@ -219,7 +231,6 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
             }
         }
 
-        // Flatten
         val out = mutableListOf<GalleryItem>()
         for (g in sortedGroups) {
             out.add(g.header)
@@ -228,9 +239,6 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         return out
     }
 
-    /** Parse date string "yyyy-MM-dd" and optionally time "HH:mm" — return epoch millis.
-     *  If parsing fails, return 0 so it sorts to oldest.
-     */
     private fun parseDateTimeForSort(dateStr: String, timeStr: String = "00:00"): Long {
         return try {
             val combined = "${if (dateStr.isBlank()) "1970-01-01" else dateStr} $timeStr"
@@ -241,8 +249,26 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         }
     }
 
-
-
+    /** Network availability helper */
+    private fun isNetworkAvailable(): Boolean {
+        val cm = requireContext().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nw = cm.activeNetwork ?: return false
+            val actNw = cm.getNetworkCapabilities(nw) ?: return false
+            return when {
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> true
+                else -> false
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val nwInfo = cm.activeNetworkInfo ?: return false
+            @Suppress("DEPRECATION")
+            return nwInfo.isConnected
+        }
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()
