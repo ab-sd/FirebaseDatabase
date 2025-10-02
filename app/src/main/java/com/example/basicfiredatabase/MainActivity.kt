@@ -21,6 +21,7 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.example.basicfiredatabase.fragments.AddUserFragment
 import com.example.basicfiredatabase.fragments.AllUsersFragment
 import com.example.basicfiredatabase.fragments.EventsFragment
+import com.example.basicfiredatabase.fragments.GalleryFragment
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -100,6 +101,15 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_view_users -> {
                     supportFragmentManager.beginTransaction()
                         .replace(R.id.fragment_container, EventsFragment())
+                        .addToBackStack(null)
+                        .commit()
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                    true
+                }
+
+                R.id.nav_gallery -> {
+                    supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, GalleryFragment())
                         .addToBackStack(null)
                         .commit()
                     drawerLayout.closeDrawer(GravityCompat.START)

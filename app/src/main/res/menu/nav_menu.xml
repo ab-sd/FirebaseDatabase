@@ -2,13 +2,19 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_add_user"
-        android:title="Add User"
+        android:title="Add Event"
         android:icon="@android:drawable/ic_menu_add" />
 
     <item
         android:id="@+id/nav_view_users"
-        android:title="View Users"
+        android:title="View Events"
         android:icon="@android:drawable/ic_menu_view" />
+
+
+    <item
+        android:id="@+id/nav_gallery"
+        android:title="View Gallery"
+        android:icon="@android:drawable/ic_menu_gallery" />
 
 
 </menu>
