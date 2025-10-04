@@ -110,13 +110,13 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
 
     /**
-     * Load past events (is_upcoming == false), try server-side ordering first.
+     * Load past events (is_complete == true), try server-side ordering first.
      * onComplete is invoked when the load finishes (success or failure) so caller can hide spinner.
      */
     private fun loadPastEventsImages(onComplete: (() -> Unit)? = null) {
-        val fieldName = "is_upcoming"
+        val fieldName = "is_complete"
         val colRef = db.collection("users")
-            .whereEqualTo(fieldName, false)
+            .whereEqualTo(fieldName, true)
             .orderBy("date", Query.Direction.DESCENDING)
             .orderBy("time", Query.Direction.DESCENDING)
 
@@ -167,11 +167,11 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
     /** Fallback: fetch whereEqualTo only, then sort client-side (newest first) */
     private fun fetchAndSortClientSide(onComplete: (() -> Unit)? = null) {
-        val fieldName = "is_upcoming"
+        val fieldName = "is_complete"
         Log.d(TAG, "FALLBACK: fetching docs with $fieldName = false and sorting client-side")
 
         db.collection("users")
-            .whereEqualTo(fieldName, false)
+            .whereEqualTo(fieldName, true)
             .get()
             .addOnSuccessListener { snaps ->
                 lifecycleScope.launch {

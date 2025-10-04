@@ -466,7 +466,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             val time = binding.tvEventTime.text?.toString()?.trim() ?: ""
             val location = binding.etLocation.text?.toString()?.trim() ?: ""
             val durationMinutes = binding.etDuration.text?.toString()?.toIntOrNull()
-            val isUpcoming = binding.switchUpcoming.isChecked
+            val isComplete = binding.switchIsComplete.isChecked
 
             // map link data
             val (includeMapLink, mapLink) = getMapLinkData()
@@ -538,7 +538,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                         time = time,
                         durationMinutes = durationMinutes,
                         location = location,
-                        isUpcoming = isUpcoming,
+                        isComplete = isComplete,
                         includeMapLink = includeMapLink,
                         mapLink = mapLink
                     )
@@ -599,7 +599,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         time: String,
         durationMinutes: Int,
         location: String,
-        isUpcoming: Boolean,
+        isComplete: Boolean,
         includeMapLink: Boolean,
         mapLink: String?
     ) {
@@ -612,7 +612,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             "duration_minutes" to durationMinutes,
             "images" to uploadedImages,
             "location" to location,
-            "is_upcoming" to isUpcoming,
+            "is_complete" to isComplete,
             // new fields:
             "include_map_link" to includeMapLink,
             "map_link" to mapLink
@@ -634,7 +634,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 binding.tvEventTime.text = "Select time"
                 binding.etDuration.text?.clear()
                 binding.etLocation.text?.clear()
-                binding.switchUpcoming.isChecked = true
+                binding.switchIsComplete.isChecked = false
+
 
                 // reset map link UI
                 binding.cbIncludeMap.isChecked = false

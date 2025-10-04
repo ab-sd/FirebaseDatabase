@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -33,115 +34,62 @@ import java.util.Locale
 class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
     companion object {
-        private const val ARG_IS_UPCOMING = "is_upcoming"
-        fun newInstance(isUpcoming: Boolean) = AllUsersFragment().apply {
-            arguments = Bundle().apply { putBoolean(ARG_IS_UPCOMING, isUpcoming) }
+        private const val ARG_SHOW_UPCOMING = "show_upcoming"
+        fun newInstance(showUpcoming: Boolean) = AllUsersFragment().apply {
+            arguments = Bundle().apply { putBoolean(ARG_SHOW_UPCOMING, showUpcoming) }
         }
     }
 
     private val db = Firebase.firestore
     private lateinit var rv: RecyclerView
 
-    private val isUpcomingFilter: Boolean by lazy { arguments?.getBoolean(ARG_IS_UPCOMING) ?: true }
+    private val showUpcomingFilter: Boolean by lazy { arguments?.getBoolean(ARG_SHOW_UPCOMING) ?: true }
 
-
-    //Firebase remote config
+    // Firebase remote config values (populated later)
     private var deleteImage_url: String? = null
     private var imageCloudApiKey: String? = null
 
-
     private val adapter = UserAdapter(
         onEdit = { user ->
-            val fragment = EditUserFragment().apply {
-                arguments = Bundle().apply {
-                    putString("id", user.id)
-                    putString("title", user.title)
-                    putString("event_type", user.eventType)
-                    putSerializable("descriptions", HashMap(user.descriptions))
-                    putString("date", user.date)
-                    putString("time", user.time)
-                    putSerializable(
-                        "images",
-                        ArrayList(user.images.map { mapOf("url" to it.url, "public_id" to it.public_id) })
-                    )
-                    putInt("duration_minutes", user.durationMinutes ?: 0)
-                    putString("location", user.location)
-                    putBoolean("is_upcoming", user.isUpcoming)
-
-                    // NEW: include map info so Edit fragment can populate it
-                    putBoolean("include_map_link", user.includeMapLink)
-                    putString("map_link", user.mapLink)
-
-                }
-            }
-
-                requireActivity().supportFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, fragment)
-                    .addToBackStack(null)
-                    .commit()
-
-
+            openEditFragment(user)
         },
         onDelete = { user ->
-
-            androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("Delete Event")
-                .setMessage("Are you sure you want to delete \"${user.title}\"?")
-                .setPositiveButton("Yes") { _, _ ->
-                    // Step 2: Show progress bar
-                    val progressDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                        .setView(R.layout.dialog_progress) // custom layout with ProgressBar
-                        .setCancelable(false)
-                        .create()
-                    progressDialog.show()
-
-                    // Step 3: Run deletion
-                    lifecycleScope.launch {
-                        val success = deleteImagesFromCloudinary(user.images)
-                        if (!success) {
-                            Toast.makeText(requireContext(), "Some images could not be deleted", Toast.LENGTH_LONG).show()
-                        }
-
-                        db.collection("users").document(user.id)
-                            .delete()
-                            .addOnSuccessListener {
-                                progressDialog.dismiss()
-                                Toast.makeText(requireContext(), "Deleted ${user.title}", Toast.LENGTH_SHORT).show()
-                            }
-                            .addOnFailureListener { e ->
-                                progressDialog.dismiss()
-                                Log.w("AllUsersFragment", "Error deleting", e)
-                                Toast.makeText(requireContext(), "Delete failed", Toast.LENGTH_SHORT).show()
-                            }
-                    }
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+            confirmAndDeleteUser(user)
         }
     )
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         rv = view.findViewById(R.id.rv_users)
+
+        setupRecyclerView()
+        applyWindowInsetsToRecyclerView()
+        setupRemoteConfig()
+        startUsersListener()
+    }
+
+    // ---------- Setup helpers ----------
+
+    private fun setupRecyclerView() {
         rv.layoutManager = LinearLayoutManager(requireContext())
         rv.adapter = adapter
+    }
 
-
-        // Adjust RecyclerView bottom padding for nav bar dynamically
+    private fun applyWindowInsetsToRecyclerView() {
         ViewCompat.setOnApplyWindowInsetsListener(rv) { v, insets ->
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + dpToPx(8))
             insets
         }
+    }
 
-
-        // Remote Config setup for deleteImage_url
+    private fun setupRemoteConfig() {
         val remoteConfig = Firebase.remoteConfig
         val configSettings = remoteConfigSettings {
             minimumFetchIntervalInSeconds = 3600
         }
         remoteConfig.setConfigSettingsAsync(configSettings)
-
 
         remoteConfig.fetchAndActivate()
             .addOnCompleteListener { task ->
@@ -150,7 +98,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     imageCloudApiKey = remoteConfig.getString("cloud_api_key")
                 }
             }
+    }
 
+    private fun startUsersListener() {
         db.collection("users")
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
@@ -162,7 +112,6 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                 val list = snapshots.documents.mapNotNull { doc ->
                     try {
                         val id = doc.id
-                        // NEW fields (events)
                         val title = doc.getString("title") ?: "No title"
                         val eventType = doc.getString("event_type") ?: "Other"
                         val descriptions =
@@ -180,7 +129,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         val includeMap = doc.getBoolean("include_map_link") ?: false
                         val mapLink = doc.getString("map_link")?.takeIf { it.isNotBlank() }
 
-                        val isUpcoming = doc.getBoolean("is_upcoming") ?: true
+                        val isComplete = doc.getBoolean("is_complete") ?: false
 
                         val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
                             val map = item as? Map<*, *>
@@ -201,22 +150,24 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                             durationMinutes = duration,
                             images = images,
                             location = location,
-
-                            includeMapLink = includeMap,   // NEW
+                            includeMapLink = includeMap,
                             mapLink = mapLink,
-
-                            isUpcoming = isUpcoming
+                            isComplete = isComplete
                         )
                     } catch (ex: Exception) {
                         null
                     }
                 }
 
-                // filter by the fragment's isUpcoming flag
-                val filtered = list.filter { it.isUpcoming == isUpcomingFilter }
+                // Filter by upcoming or completed
+                val filtered = if (showUpcomingFilter) {
+                    list.filter { !it.isComplete }   // upcoming = not complete
+                } else {
+                    list.filter { it.isComplete }    // show completed events
+                }
 
-                // sort: upcoming -> earliest to latest, past -> latest to oldest
-                val sorted = if (isUpcomingFilter) {
+                // Sort (upcoming earliest->latest, completed latest->oldest)
+                val sorted = if (showUpcomingFilter) {
                     filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) }
                 } else {
                     filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
@@ -226,11 +177,79 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             }
     }
 
+    // ---------- Action handlers ----------
 
-        private fun dpToPx(dp: Int): Int {
-        return (dp * resources.displayMetrics.density).toInt()
+    private fun openEditFragment(user: User) {
+        val fragment = EditUserFragment().apply {
+            arguments = Bundle().apply {
+                putString("id", user.id)
+                putString("title", user.title)
+                putString("event_type", user.eventType)
+                putSerializable("descriptions", HashMap(user.descriptions))
+                putString("date", user.date)
+                putString("time", user.time)
+                putSerializable(
+                    "images",
+                    ArrayList(user.images.map { mapOf("url" to it.url, "public_id" to it.public_id) })
+                )
+                putInt("duration_minutes", user.durationMinutes ?: 0)
+                putString("location", user.location)
+                putBoolean("is_complete", user.isComplete)
+
+                putBoolean("include_map_link", user.includeMapLink)
+                putString("map_link", user.mapLink)
+            }
+        }
+
+        requireActivity().supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, fragment)
+            .addToBackStack(null)
+            .commit()
     }
 
+    private fun confirmAndDeleteUser(user: User) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Delete Event")
+            .setMessage("Are you sure you want to delete \"${user.title}\"?")
+            .setPositiveButton("Yes") { _, _ ->
+                val progressDialog = createProgressDialog()
+                progressDialog.show()
+
+                lifecycleScope.launch {
+                    val success = deleteImagesFromCloudinary(user.images)
+                    if (!success) {
+                        Toast.makeText(requireContext(), "Some images could not be deleted", Toast.LENGTH_LONG).show()
+                    }
+
+                    db.collection("users").document(user.id)
+                        .delete()
+                        .addOnSuccessListener {
+                            progressDialog.dismiss()
+                            Toast.makeText(requireContext(), "Deleted ${user.title}", Toast.LENGTH_SHORT).show()
+                        }
+                        .addOnFailureListener { e ->
+                            progressDialog.dismiss()
+                            Log.w("AllUsersFragment", "Error deleting", e)
+                            Toast.makeText(requireContext(), "Delete failed", Toast.LENGTH_SHORT).show()
+                        }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun createProgressDialog(): AlertDialog {
+        return AlertDialog.Builder(requireContext())
+            .setView(R.layout.dialog_progress)
+            .setCancelable(false)
+            .create()
+    }
+
+    // ---------- Utility methods (kept unchanged) ----------
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
 
     // parse yyyy-MM-dd + HH:mm into Date
     private fun parseDateTimeOrEpoch(dateStr: String, timeStr: String): Date {
@@ -245,7 +264,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         }
     }
 
-    // delete helper
+    // delete helper (unchanged)
     private suspend fun deleteImagesFromCloudinary(images: List<UserImage>): Boolean {
         if (images.isEmpty()) return true
         return withContext(Dispatchers.IO) {

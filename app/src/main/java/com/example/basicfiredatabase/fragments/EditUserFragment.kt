@@ -340,7 +340,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 val time = snapshot.getString("time") ?: ""
                 val duration = snapshot.getLong("duration_minutes")?.toString() ?: ""
                 val location = snapshot.getString("location") ?: ""
-                val isUpcoming = snapshot.getBoolean("is_upcoming") ?: true
+                val isComplete = snapshot.getBoolean("is_complete") ?: false
 
                 val includeMapLink = snapshot.getBoolean("include_map_link") ?: false
                 val mapLink = snapshot.getString("map_link") ?: ""
@@ -386,7 +386,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 binding.tvEditTime.text = if (time.isNotBlank()) time else "Select time"
                 binding.etEditDuration.setText(duration)
                 binding.etEditLocation.setText(location)
-                binding.switchEditUpcoming.isChecked = isUpcoming
+                binding.switchEditIsComplete.isChecked = isComplete
 
                 // NEW: map fields
                 binding.cbEditIncludeMap.isChecked = includeMapLink
@@ -420,7 +420,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         val timeArg = args.getString("time") ?: ""
         val durationArg = args.getInt("duration_minutes", 0)
         val locationArg = args.getString("location") ?: ""
-        val isUpcomingArg = args.getBoolean("is_upcoming", true)
+        val isCompleteArg = args.getBoolean("is_complete", false)
 
         // NEW: optional map args
         val includeMapArg = args.getBoolean("include_map_link", false)
@@ -460,7 +460,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         binding.tvEditTime.text = if (timeArg.isNotBlank()) timeArg else "Select time"
         binding.etEditDuration.setText(if (durationArg > 0) durationArg.toString() else "")
         binding.etEditLocation.setText(locationArg)
-        binding.switchEditUpcoming.isChecked = isUpcomingArg
+        binding.switchEditIsComplete.isChecked = isCompleteArg
 
 
         // NEW: apply include-map and link from arguments
@@ -699,7 +699,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             null
         }
 
-        val isUpcoming = binding.switchEditUpcoming.isChecked
+        val isComplete = binding.switchEditIsComplete.isChecked
 
         val totalImagesCount = existingImages.size + newImageUris.size
         if (totalImagesCount <= 0) {
@@ -760,7 +760,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     "time" to time,
                     "duration_minutes" to durationMinutes,
                     "location" to location,
-                    "is_upcoming" to isUpcoming,
+                    "is_complete" to isComplete,
                     "images" to finalImages,
 
                     // NEW fields:

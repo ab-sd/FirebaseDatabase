@@ -68,7 +68,7 @@ class UserAdapter(
         }
 
         private fun bindDetails(user: User) {
-            val status = if (user.isUpcoming) "Upcoming" else "Completed"
+            val status = if (!user.isComplete) "Upcoming" else "Completed"
             val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
 
             // note: location moved to dedicated tv_location

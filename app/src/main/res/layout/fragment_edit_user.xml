@@ -315,16 +315,16 @@
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:text="Is Upcoming?"
+                android:text="Mark event as completed"
                 android:textColor="#F57F17"
                 android:textStyle="bold"
                 android:textSize="16sp" />
 
             <Switch
-                android:id="@+id/switch_edit_upcoming"
+                android:id="@+id/switch_edit_is_complete"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:checked="true" />
+                android:checked="false" />
         </LinearLayout>
 
 

@@ -15,7 +15,7 @@ data class User(
     val includeMapLink: Boolean = false,
     val mapLink: String? = null,
 
-    val isUpcoming: Boolean = true,
+    val isComplete: Boolean = false,
     var expanded: Boolean = false
 )
 

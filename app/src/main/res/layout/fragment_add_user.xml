@@ -303,9 +303,9 @@ android:dividerPadding="12dp">
 
     <!-- Upcoming (hidden by default, always yes) -->
 <Switch
-    android:id="@+id/switch_upcoming"
+    android:id="@+id/switch_is_complete"
     android:visibility="gone"
-    android:checked="true"
+    android:checked="false"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content" />
 
