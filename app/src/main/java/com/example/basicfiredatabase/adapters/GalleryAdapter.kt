@@ -18,7 +18,7 @@ private const val TYPE_HEADER = 0
 private const val TYPE_IMAGE = 1
 
 class GalleryAdapter(
-    private val onImageClick: (String, Int) -> Unit // (imageUrl, positionInEventGroup) – optional
+    private val onImageClick: (String, String) -> Unit
 ) : ListAdapter<GalleryItem, RecyclerView.ViewHolder>(Diff) {
 
     companion object {
@@ -83,8 +83,12 @@ class GalleryAdapter(
                 .into(iv)
 
             iv.setOnClickListener {
-                // open full-screen viewer using external callback
-                onImageClick(img.imageUrl, bindingAdapterPosition)
+                // protect against invalid adapter position
+                val pos = bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return@setOnClickListener
+
+                // pass tapped image url + its event id so caller can build the event image list
+                onImageClick(img.imageUrl, img.eventId)
             }
         }
     }

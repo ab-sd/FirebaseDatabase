@@ -204,12 +204,12 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             val extraGap = dpToPx(4)
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + extraGap)
 
-            val lp = binding.btnSave.layoutParams
+            val lp = binding.layoutActionButtons.layoutParams
             if (lp is ViewGroup.MarginLayoutParams) {
                 val desiredBottomMargin = navBottom + dpToPx(6)
                 if (lp.bottomMargin != desiredBottomMargin) {
                     lp.bottomMargin = desiredBottomMargin
-                    binding.btnSave.layoutParams = lp
+                    binding.layoutActionButtons.layoutParams = lp
                 }
             }
 
@@ -442,6 +442,19 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     private fun setupPickAndSaveHandlers() {
         binding.btnPickImages.setOnClickListener { pickImagesLauncher.launch("image/*") }
 
+
+        binding.btnCancel.setOnClickListener {
+            // Make sure UI is clear (hide progress)
+            binding.pbSave.visibility = View.GONE
+
+            // cancel any active translation debounce so it doesn't try to update UI while fragment closing
+            translationJob?.cancel()
+
+            // pop this fragment off the back stack
+            parentFragmentManager.popBackStack()
+        }
+
+
         binding.btnSave.setOnClickListener {
 
             val title = binding.etTitle.text?.toString()?.trim() ?: ""
@@ -493,6 +506,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             // launch upload-and-save flow
             binding.btnPickImages.isEnabled = false
             binding.btnSave.isEnabled = false
+            binding.btnCancel.isEnabled = false
+
 
             lifecycleScope.launchWhenStarted {
                 try {
@@ -532,6 +547,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 } finally {
                     binding.btnPickImages.isEnabled = true
                     binding.btnSave.isEnabled = true
+                    binding.btnCancel.isEnabled = true
+
                 }
             }
         }

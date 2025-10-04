@@ -372,15 +372,42 @@
             android:layout_marginTop="16dp"/>
 
 
-        <!-- Save button -->
+    <LinearLayout
+        android:id="@+id/et_action_buttons"
+        android:layout_marginTop="20dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
         <Button
             android:id="@+id/btn_update"
             android:text="Save Event Details"
-            android:layout_marginTop="20dp"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
             android:backgroundTint="#FBC02D"
-            android:textColor="#000000"
-            android:padding="12dp"/>
+            android:textColor="#FFF" />
+
+
+        <!-- spacing between buttons -->
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/et_btn_cancel"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#BDBDBD"
+            android:textColor="#000"
+            android:text="Cancel" />
+
     </LinearLayout>
+
+
+    </LinearLayout>
+
+
 </ScrollView>

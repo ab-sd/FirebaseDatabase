@@ -142,12 +142,12 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             val extraGap = dpToPx(4)
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + imeBottom + extraGap)
 
-            val lp = binding.btnUpdate.layoutParams
+            val lp = binding.etActionButtons.layoutParams
             if (lp is ViewGroup.MarginLayoutParams) {
                 val desiredBottomMargin = navBottom + dpToPx(6)
                 if (lp.bottomMargin != desiredBottomMargin) {
                     lp.bottomMargin = desiredBottomMargin
-                    binding.btnUpdate.layoutParams = lp
+                    binding.etActionButtons.layoutParams = lp
                 }
             }
 
@@ -245,6 +245,18 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     private fun setupPickAndUpdateHandlers() {
         binding.btnPickMoreImages.setOnClickListener { pickImagesLauncher.launch("image/*") }
         binding.btnUpdate.setOnClickListener { performUpdate() }
+
+        binding.etBtnCancel.setOnClickListener {
+            // Make sure UI is clear (hide progress)
+            binding.pbUpdate.visibility = View.GONE
+
+            // cancel any active translation debounce so it doesn't try to update UI while fragment closing
+            translationJob?.cancel()
+
+            // pop this fragment off the back stack
+            parentFragmentManager.popBackStack()
+        }
+
     }
 
     private fun handleIncomingArguments() {
@@ -699,6 +711,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         // disable UI while processing (do this immediately so user cannot change content)
         binding.btnPickMoreImages.isEnabled = false
         binding.btnUpdate.isEnabled = false
+        binding.etBtnCancel.isEnabled = false
 
 
         // Clear focus to avoid focus change scrolling to an image view
@@ -785,6 +798,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     binding.btnPickMoreImages.isEnabled = true
                     binding.btnUpdate.isEnabled = true
                     binding.pbUpdate.visibility = View.GONE
+                    binding.etBtnCancel.isEnabled = true
+
                 }
             }
         }

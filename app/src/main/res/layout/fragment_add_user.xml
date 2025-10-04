@@ -346,14 +346,43 @@ android:dividerPadding="12dp">
         android:visibility="gone"
         android:layout_marginTop="16dp"/>
 
-<!-- Save button -->
-<Button
-    android:id="@+id/btn_save"
-    android:layout_marginTop="20dp"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:backgroundTint="#F57F17"
-    android:textColor="#FFF"
-    android:text="Save Event Details"/>
+    <!-- Save/Cancel row (replace the single btn_save) -->
+    <LinearLayout
+        android:id="@+id/layout_action_buttons"
+        android:layout_marginTop="20dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#F57F17"
+            android:textColor="#FFF"
+            android:text="Save Event Details" />
+
+
+        <!-- spacing between buttons -->
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#BDBDBD"
+            android:textColor="#000"
+            android:text="Cancel" />
+
+    </LinearLayout>
+
+
+
+
 </LinearLayout>
     </ScrollView>

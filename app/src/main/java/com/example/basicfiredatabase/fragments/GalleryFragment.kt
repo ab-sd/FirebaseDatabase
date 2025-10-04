@@ -1,6 +1,5 @@
 package com.example.basicfiredatabase.fragments
 
-import android.content.ContentValues.TAG
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -11,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.GalleryAdapter
@@ -19,8 +19,16 @@ import com.example.basicfiredatabase.databinding.FragmentGalleryBinding
 import com.google.firebase.firestore.Query
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class GalleryFragment : Fragment(R.layout.fragment_gallery) {
+
+    companion object {
+        private const val TAG = "GalleryFragment"
+    }
+
 
     private var _binding: FragmentGalleryBinding? = null
     private val binding get() = _binding!!
@@ -40,10 +48,29 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        adapter = GalleryAdapter { imageUrl, _ ->
-            val frag = ImageViewerFragment.newInstance(listOf(imageUrl), 0)
+        setupRecycler()
+        setupSwipeRefresh()
+
+        binding.srlGallery.isRefreshing = true
+        loadPastEventsImages(onComplete = { if (isAdded) binding.srlGallery.isRefreshing = false })
+
+    }
+
+
+    private fun setupRecycler() {
+        adapter = GalleryAdapter { tappedUrl, eventId ->
+            // collect all image URLs belonging to the same eventId in the current list
+            val eventImages = adapter.currentList
+                .filterIsInstance<GalleryItem.Image>()
+                .filter { it.eventId == eventId }
+                .map { it.imageUrl }
+
+            // find start index of tapped image
+            val startIndex = eventImages.indexOf(tappedUrl).coerceAtLeast(0)
+
+            val frag = ImageViewerFragment.newInstance(eventImages, startIndex)
             requireActivity().supportFragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, frag)
+                .add(R.id.fragment_container, frag)
                 .addToBackStack(null)
                 .commit()
         }
@@ -59,9 +86,10 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         binding.rvGallery.setHasFixedSize(true)
         binding.rvGallery.layoutManager = glm
         binding.rvGallery.adapter = adapter
+    }
 
-        // ---- SwipeRefresh setup ----
-        // Ensure your fragment_gallery.xml wraps the RecyclerView in a SwipeRefreshLayout with id srl_gallery
+
+    private fun setupSwipeRefresh() {
         binding.srlGallery.setColorSchemeResources(
             R.color.teal_200,
             android.R.color.holo_blue_light,
@@ -73,15 +101,13 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                 binding.srlGallery.isRefreshing = false
                 Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
             } else {
-                // use the callback to turn off spinner when done
+                // show spinner (user initiated) and load, stopping spinner in onComplete
+                binding.srlGallery.isRefreshing = true
                 loadPastEventsImages(onComplete = { if (isAdded) binding.srlGallery.isRefreshing = false })
             }
         }
-
-        // show spinner initially and load
-        binding.srlGallery.isRefreshing = true
-        loadPastEventsImages(onComplete = { if (isAdded) binding.srlGallery.isRefreshing = false })
     }
+
 
     /**
      * Load past events (is_upcoming == false), try server-side ordering first.
@@ -98,22 +124,43 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
         colRef.get()
             .addOnSuccessListener { snaps ->
-                Log.d(TAG, "Server-ordered query succeeded. docs returned: ${snaps.size()}")
-                val galleryItems = buildGalleryItemsFromDocs(snaps.documents)
-                Log.d(TAG, "gallery items built: ${galleryItems.size}")
+                // offload doc->items mapping to background thread to avoid UI jank
+                lifecycleScope.launch {
+                    val docs = snaps.documents
+                    val galleryItems = withContext(Dispatchers.Default) { buildGalleryItemsFromDocs(docs) }
+                    Log.d(TAG, "Server-ordered query succeeded. docs returned: ${docs.size}; gallery items: ${galleryItems.size}")
 
-                if (galleryItems.isEmpty()) {
-                    binding.rvGallery.visibility = View.GONE
-                    Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
-                } else {
-                    binding.rvGallery.visibility = View.VISIBLE
-                    adapter.submitList(galleryItems)
+                    if (galleryItems.isEmpty()) {
+                        binding.rvGallery.visibility = View.GONE
+                        Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
+                    } else {
+                        binding.rvGallery.visibility = View.VISIBLE
+                        adapter.submitList(galleryItems)
+                    }
+
+                    onComplete?.invoke()
                 }
-                onComplete?.invoke()
             }
             .addOnFailureListener { e ->
-                Log.w(TAG, "Server-ordered query failed, falling back to client-side sorting. Error: ${e.message}", e)
-                // fallback path will call onComplete when it finishes
+                // Log full error + stacktrace so you can inspect index / permission errors in Logcat
+                Log.w(TAG, "Server-ordered query failed.", e)
+                val msg = e?.message
+                Log.w(TAG, "Failure message: $msg")
+
+                // If Firestore requires a composite index it often includes a console URL in the message.
+                val url = msg?.let { """https?://\S+""".toRegex().find(it)?.value }
+                if (!url.isNullOrBlank()) {
+                    Log.w(TAG, "Possible Firestore index URL: $url")
+
+                }
+
+                // Inform user/dev
+                Toast.makeText(requireContext(), "Server query failed. Falling back to client-side fetch.", Toast.LENGTH_LONG).show()
+
+                // important: always call onComplete so any refresh spinner is stopped
+                onComplete?.invoke()
+
+                // fallback to client-side fetch+sort
                 fetchAndSortClientSide(onComplete)
             }
     }
@@ -127,23 +174,25 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
             .whereEqualTo(fieldName, false)
             .get()
             .addOnSuccessListener { snaps ->
-                Log.d(TAG, "Fallback query returned ${snaps.size()} docs")
-                val galleryItems = buildGalleryItemsFromDocs(snaps.documents)
-                val ordered = orderGalleryItemsByEventDateDesc(galleryItems)
-                Log.d(TAG, "Fallback gallery items built (after sort): ${ordered.size}")
+                lifecycleScope.launch {
+                    val docs = snaps.documents
+                    val galleryItems = withContext(Dispatchers.Default) { buildGalleryItemsFromDocs(docs) }
+                    val ordered = orderGalleryItemsByEventDateDesc(galleryItems)
+                    Log.d(TAG, "Fallback gallery items built (after sort): ${ordered.size}")
 
-                if (ordered.isEmpty()) {
-                    binding.rvGallery.visibility = View.GONE
-                    Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
-                } else {
-                    binding.rvGallery.visibility = View.VISIBLE
-                    adapter.submitList(ordered)
+                    if (ordered.isEmpty()) {
+                        binding.rvGallery.visibility = View.GONE
+                        Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
+                    } else {
+                        binding.rvGallery.visibility = View.VISIBLE
+                        adapter.submitList(ordered)
+                    }
+                    onComplete?.invoke()
                 }
-                onComplete?.invoke()
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Fallback query failed", e)
-                Toast.makeText(requireContext(), "Failed loading gallery: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "Failed loading gallery: ${e?.localizedMessage}", Toast.LENGTH_LONG).show()
                 onComplete?.invoke()
             }
     }
