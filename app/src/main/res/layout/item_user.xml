@@ -43,16 +43,16 @@
                 android:gravity="center"
                 android:text="" />
 
-
         </LinearLayout>
 
+        <!-- Collapsed: Event type (now bold for collapsed card) -->
         <TextView
             android:id="@+id/tv_event_type"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="8dp"
             android:text="Event type"
-            android:textStyle="italic"
+            android:textStyle="bold"
             android:textColor="#444444"
             android:textSize="15sp"/>
 
@@ -72,7 +72,7 @@
                 android:contentDescription="thumbnail"
                 android:src="@drawable/ic_placeholder" />
 
-            <!-- Collapsed summary (vertical column: description then boxed date/time) -->
+            <!-- Collapsed summary (vertical column: description then DATE badge only) -->
             <LinearLayout
                 android:orientation="vertical"
                 android:layout_width="0dp"
@@ -86,38 +86,40 @@
                     android:layout_height="wrap_content"
                     android:text=""
                     android:textColor="#333333"
-                    android:textSize="14sp" />
+                    android:textSize="14sp"
+                    android:textStyle="italic" />
 
-                <!-- Date & Time badges boxed under description -->
+                <!-- Only DATE badge shown in collapsed state -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:weightSum="2">
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="8dp">
+
+                    <ImageView
+                        android:id="@+id/iv_date_box"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@drawable/ic_calendar_boxed"
+                        android:contentDescription="date icon"
+                        android:adjustViewBounds="false"
+                        android:scaleType="centerInside" />
 
                     <TextView
                         android:id="@+id/tv_date"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
                         android:text=""
                         android:textColor="#5D4037"
-                        android:padding="8dp"
-                        android:layout_marginEnd="8dp"
-                        android:background="@drawable/bg_badge_light"
-                    android:gravity="center" />
-
-                    <TextView
-                        android:id="@+id/tv_time"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:text=""
-                        android:textColor="#5D4037"
-                        android:padding="8dp"
-                        android:background="@drawable/bg_badge_light"
-                        android:gravity="center" />
+                        android:textSize="14sp"
+                        android:gravity="center_vertical" />
                 </LinearLayout>
+
+
+
             </LinearLayout>
         </LinearLayout>
 
@@ -130,27 +132,100 @@
             android:visibility="gone"
             android:padding="12dp">
 
-            <!-- Metadata neatly styled (keeps type/location/duration/status) -->
+            <!-- keep old tv_details hidden to avoid changing adapter logic -->
             <TextView
                 android:id="@+id/tv_details"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
                 android:textColor="#555555"
-                android:textSize="14sp" />
+                android:textSize="14sp"
+                android:visibility="gone" />
 
-            <!-- Location: clickable when map link exists, plain text otherwise -->
-            <TextView
-                android:id="@+id/tv_location"
+            <!-- NEW: start - end (duration) row: boxed clock icon + time range text -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text=""
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp">
+
+                <ImageView
+                    android:id="@+id/iv_duration_box"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_clock_boxed"
+                    android:contentDescription="duration icon"
+                    android:adjustViewBounds="false"
+                    android:scaleType="centerInside" />
+
+                <TextView
+                    android:id="@+id/tv_time_range"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text=""
                 android:textSize="14sp"
-                android:textColor="#333333" />
+                android:textColor="@android:color/black" />
+            </LinearLayout>
+
+            <!-- Location row: boxed icon + location text (unchanged behavior) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/iv_location_box"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_location_boxed"
+                    android:contentDescription="location icon"
+                    android:adjustViewBounds="false"
+                    android:scaleType="centerInside" />
+
+                <TextView
+                    android:id="@+id/tv_location"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="14sp"
+                    android:textColor="@android:color/black"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
 
 
-            <!-- Image gallery -->
+            <!-- Images label (shown only when there are images) -->
+            <LinearLayout
+                android:id="@+id/images_label_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tv_images_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Images"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:gravity="center" />
+
+                <!-- small underline bar (pure XML, reliable across platforms) -->
+                <View
+                    android:layout_width="100dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="6dp"
+                    android:background="#88000000" />
+            </LinearLayout>
+
+
+            <!-- Image gallery (unchanged) -->
             <HorizontalScrollView
                 android:layout_marginTop="8dp"
                 android:layout_width="match_parent"
@@ -163,7 +238,7 @@
                     android:layout_height="match_parent" />
             </HorizontalScrollView>
 
-            <!-- Edit + Delete buttons -->
+            <!-- Edit + Delete buttons (unchanged) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

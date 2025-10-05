@@ -1,0 +1,13 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- rounded yellow background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FFD54F" />
+            <size android:width="36dp" android:height="36dp"/>
+            <corners android:radius="6dp"/>
+        </shape>
+    </item>
+
+    <!-- clock vector centered (assumes you have res/drawable/ic_clock.xml) -->
+    <item android:drawable="@drawable/ic_clock" android:top="6dp" android:left="6dp" android:right="6dp" android:bottom="6dp"/>
+</layer-list>

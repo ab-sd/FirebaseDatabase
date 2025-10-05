@@ -21,6 +21,11 @@ import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.databinding.ItemUserBinding
 import com.example.basicfiredatabase.fragments.ImageViewerFragment
 import com.example.basicfiredatabase.models.User
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+
 
 class UserAdapter(
     private val items: MutableList<User> = mutableListOf(),
@@ -90,17 +95,52 @@ class UserAdapter(
                 user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
             binding.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
 
+            // show only date in collapsed card (no time badge)
             val dateText = user.date.ifBlank { "No date set" }
-            val timeText = user.time.ifBlank { "No time set" }
-            binding.tvDate.text = "Date: $dateText"
-            binding.tvTime.text = "Time: $timeText"
+            binding.tvDate.text = dateText
+
+            // ensure time badge (if present elsewhere) isn't used in collapsed UI:
+            // (we removed the tv_time view from layout, so no binding.tvTime usage here)
         }
 
         private fun bindDetails(user: User) {
-            val status = if (!user.isComplete) "Upcoming" else "Completed"
-            val durationText = user.durationMinutes?.let { "$it min" } ?: "N/A"
+            val durationMinutes = user.durationMinutes ?: 0
 
-            // note: location moved to dedicated tv_location
+            // fallback text
+            var timeRangeText = if (durationMinutes > 0) "${durationMinutes} min" else "N/A"
+
+            val timePattern = "HH:mm" // adjust if your stored format differs
+            val sdf = SimpleDateFormat(timePattern, Locale.getDefault())
+            sdf.isLenient = false
+
+            try {
+                val startStr = user.time
+                if (!startStr.isNullOrBlank()) {
+                    val startDate = sdf.parse(startStr) // Date
+                    if (startDate != null) {
+                        val cal = Calendar.getInstance()
+                        cal.time = startDate
+
+                        // compute end time by adding minutes
+                        val endCal = cal.clone() as Calendar
+                        endCal.add(Calendar.MINUTE, durationMinutes)
+
+                        val startFormatted = sdf.format(cal.time)
+                        val endFormatted = sdf.format(endCal.time)
+                        timeRangeText = "$startFormatted \u2013 $endFormatted (${durationMinutes} min)"
+                    }
+                }
+            } catch (ex: ParseException) {
+                if (durationMinutes > 0) timeRangeText = "${durationMinutes} min" else timeRangeText = "N/A"
+            } catch (ex: Exception) {
+                if (durationMinutes > 0) timeRangeText = "${durationMinutes} min" else timeRangeText = "N/A"
+            }
+
+            binding.root.findViewById<TextView>(R.id.tv_time_range)?.text = timeRangeText
+
+            // keep hidden tvDetails text for compatibility
+            val status = if (!user.isComplete) "Upcoming" else "Completed"
+            val durationText = if (durationMinutes > 0) "$durationMinutes min" else "N/A"
             binding.tvDetails.text = buildString {
                 append("Type: ${user.eventType}\n")
                 append("Duration: $durationText\n")
@@ -147,6 +187,11 @@ class UserAdapter(
         private fun bindImages(user: User) {
             // clear old image views
             binding.llImages.removeAllViews()
+
+            // show/hide the "Images" label only when expanded, not completed, and images exist
+            binding.imagesLabelContainer.visibility =
+                if (user.expanded && user.images.isNotEmpty() && !user.isComplete) View.VISIBLE else View.GONE
+
 
             if (!user.expanded || user.images.isEmpty() || user.isComplete) return
 
