@@ -701,11 +701,12 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
         val isComplete = binding.switchEditIsComplete.isChecked
 
-        val totalImagesCount = existingImages.size + newImageUris.size
-        if (totalImagesCount <= 0) {
-            Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
-            return
-        }
+        //uploading images is optional
+//        val totalImagesCount = existingImages.size + newImageUris.size
+//        if (totalImagesCount <= 0) {
+//            Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
+//            return
+//        }
 
 
         // disable UI while processing (do this immediately so user cannot change content)

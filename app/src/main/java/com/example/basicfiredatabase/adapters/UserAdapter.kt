@@ -7,6 +7,8 @@ import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.AnimationUtils
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -42,23 +44,50 @@ class UserAdapter(
             binding.tvName.text = user.title
             binding.tvEventType.text = user.eventType
 
-            // Thumbnail (first image) - show/hide
-            if (user.images.isNotEmpty()) {
-                binding.ivThumbnail.visibility = View.VISIBLE
+            // Set expand icon image depending on expanded state (no rotation animation)
+            val expandRes =
+                if (user.expanded) R.drawable.ic_chevron_down else R.drawable.ic_chevron_right
+            binding.ivExpand.setImageResource(expandRes)
+            binding.ivExpand.imageTintList = null
+
+            // Thumbnail (first image) - show only for upcoming events, when images exist,
+            // and when the card is COLLAPSED. We keep the same fade-in/out behavior you had.
+            val iv = binding.ivThumbnail
+            val shouldShowThumb = !user.isComplete && !user.expanded && user.images.isNotEmpty()
+
+            if (shouldShowThumb) {
                 Glide.with(ctx)
                     .load(user.images[0].url)
                     .centerCrop()
-                    .into(binding.ivThumbnail)
+                    .into(iv)
+
+                if (iv.visibility != View.VISIBLE) {
+                    iv.alpha = 0f
+                    iv.visibility = View.VISIBLE
+                    iv.animate().alpha(1f).setDuration(180).start()
+                } else {
+                    iv.animate().alpha(1f).setDuration(120).start()
+                }
             } else {
-                binding.ivThumbnail.visibility = View.GONE
+                if (iv.visibility == View.VISIBLE) {
+                    iv.animate().alpha(0f).setDuration(180).withEndAction {
+                        iv.visibility = View.GONE
+                        iv.alpha = 0f
+                    }.start()
+                } else {
+                    iv.visibility = View.GONE
+                    iv.alpha = 0f
+                }
             }
         }
+
 
         private fun bindSummary(user: User) {
             // Preferred language for description
             val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
             val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
-            val descToShow = user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
+            val descToShow =
+                user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
             binding.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
 
             val dateText = user.date.ifBlank { "No date set" }
@@ -79,7 +108,6 @@ class UserAdapter(
             }
 
             binding.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
-            binding.ivExpand.rotation = if (user.expanded) 180f else 0f
         }
 
         private fun bindLocation(user: User) {
@@ -120,7 +148,7 @@ class UserAdapter(
             // clear old image views
             binding.llImages.removeAllViews()
 
-            if (!user.expanded || user.images.isEmpty()) return
+            if (!user.expanded || user.images.isEmpty() || user.isComplete) return
 
             val sizePx = (ctx.resources.displayMetrics.density * 200).toInt()
             val margin = (ctx.resources.displayMetrics.density * 6).toInt()
@@ -151,11 +179,10 @@ class UserAdapter(
         }
 
         private fun bindActions(user: User, position: Int) {
-            // Toggle expand/collapse when row is clicked
+            // Toggle expand/collapse when row is clicked. No rotation animation; just swap icon on rebind.
             binding.root.setOnClickListener {
                 user.expanded = !user.expanded
-                binding.ivExpand.animate().rotation(if (user.expanded) 180f else 0f).setDuration(150).start()
-                // notifyItemChanged from adapter level (safe because VH is inner)
+                // immediately update this item so bindHeader runs and sets the correct chevron + thumbnail state
                 this@UserAdapter.notifyItemChanged(position)
             }
 
@@ -164,7 +191,8 @@ class UserAdapter(
         }
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return VH(binding)
     }

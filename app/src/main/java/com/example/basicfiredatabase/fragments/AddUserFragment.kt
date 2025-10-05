@@ -487,10 +487,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 Toast.makeText(requireContext(), "Enter a valid duration", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (selectedImageUris.isEmpty()) {
-                Toast.makeText(requireContext(), "Please select at least one image", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+
+
 
             if (includeMapLink && mapLink.isNullOrEmpty()) {
                 Toast.makeText(requireContext(), "Please paste the Google Maps link or uncheck \"Include Google Maps link\"", Toast.LENGTH_LONG).show()
@@ -513,6 +511,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 try {
                     // ensure upload if needed
                     if (selectedImageUris.size != uploadedImages.size) {
+
                         if (imageUploadUrl.isNullOrEmpty()) {
                             Toast.makeText(requireContext(), "Backend URL not loaded", Toast.LENGTH_SHORT).show()
                             return@launchWhenStarted
@@ -610,13 +609,16 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             "date" to date,
             "time" to time,
             "duration_minutes" to durationMinutes,
-            "images" to uploadedImages,
             "location" to location,
             "is_complete" to isComplete,
             // new fields:
             "include_map_link" to includeMapLink,
             "map_link" to mapLink
         )
+
+        if (uploadedImages.isNotEmpty()) {
+            event["images"] = uploadedImages
+        }
 
         binding.pbSave.visibility = View.VISIBLE
 

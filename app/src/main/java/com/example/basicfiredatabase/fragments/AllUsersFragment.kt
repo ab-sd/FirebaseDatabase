@@ -1,8 +1,12 @@
 package com.example.basicfiredatabase.fragments
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.ViewCompat
@@ -11,10 +15,13 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.UserAdapter
 import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.models.UserImage
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.remoteconfig.ktx.remoteConfig
@@ -40,8 +47,12 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         }
     }
 
+    private val TAG = "AllUsersFragment"
     private val db = Firebase.firestore
     private lateinit var rv: RecyclerView
+    private lateinit var srl: SwipeRefreshLayout
+    private lateinit var tvEmpty: TextView
+
 
     private val showUpcomingFilter: Boolean by lazy { arguments?.getBoolean(ARG_SHOW_UPCOMING) ?: true }
 
@@ -50,23 +61,41 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     private var imageCloudApiKey: String? = null
 
     private val adapter = UserAdapter(
-        onEdit = { user ->
-            openEditFragment(user)
-        },
-        onDelete = { user ->
-            confirmAndDeleteUser(user)
-        }
+        onEdit = { user -> openEditFragment(user) },
+        onDelete = { user -> confirmAndDeleteUser(user) }
     )
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
         rv = view.findViewById(R.id.rv_users)
+        srl = view.findViewById(R.id.srl_users)
+        tvEmpty = view.findViewById(R.id.tv_empty)
+
 
         setupRecyclerView()
         applyWindowInsetsToRecyclerView()
         setupRemoteConfig()
+
+        // Add swipe-to-refresh
+        setupSwipeRefresh()
+
+        // Start realtime listener (keeps UI up-to-date)
         startUsersListener()
+
+        // initial one-shot load (shows spinner on open); spinner will be stopped in onComplete
+        if (!isNetworkAvailable()) {
+            // show cached data (if any) but inform the user we're offline and stop spinner
+            srl.isRefreshing = false
+            Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+            // still attempt a one-shot fetch to surface cached results (optional)
+            fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+        } else {
+            // online: show spinner and fetch
+            srl.isRefreshing = true
+            fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+        }
+
     }
 
     // ---------- Setup helpers ----------
@@ -86,9 +115,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
     private fun setupRemoteConfig() {
         val remoteConfig = Firebase.remoteConfig
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 3600
-        }
+        val configSettings = remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 }
         remoteConfig.setConfigSettingsAsync(configSettings)
 
         remoteConfig.fetchAndActivate()
@@ -100,84 +127,150 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             }
     }
 
+    private fun showEmptyState(items: List<User>) {
+        if (items.isEmpty()) {
+            val message = if (showUpcomingFilter) "No upcoming events" else "No past events"
+            tvEmpty.text = message
+            tvEmpty.visibility = View.VISIBLE
+            rv.visibility = View.GONE
+        } else {
+            tvEmpty.visibility = View.GONE
+            rv.visibility = View.VISIBLE
+        }
+    }
+
+
+    /**
+     * Real-time listener that updates UI whenever Firestore changes.
+     * Refactored to reuse buildUsersFromDocs for consistent mapping logic.
+     */
     private fun startUsersListener() {
         db.collection("users")
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
-                    Log.w("AllUsersFragment", "Listen failed.", e)
+                    Log.w(TAG, "Listen failed.", e)
                     return@addSnapshotListener
                 }
                 if (snapshots == null) return@addSnapshotListener
 
-                val list = snapshots.documents.mapNotNull { doc ->
-                    try {
-                        val id = doc.id
-                        val title = doc.getString("title") ?: "No title"
-                        val eventType = doc.getString("event_type") ?: "Other"
-                        val descriptions =
-                            (doc.get("descriptions") as? Map<*, *>)?.mapNotNull { entry ->
-                                val k = entry.key as? String
-                                val v = entry.value as? String
-                                if (k != null && v != null) k to v else null
-                            }?.toMap() ?: emptyMap()
+                lifecycleScope.launch {
+                    val docs = snapshots.documents
+                    val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
 
-                        val date = doc.getString("date") ?: ""
-                        val time = doc.getString("time") ?: ""
-                        val duration = doc.getLong("duration_minutes")?.toInt()
-                        val location = doc.getString("location")
+                    // Filter + sort exactly as before
+                    val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
+                    val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
 
-                        val includeMap = doc.getBoolean("include_map_link") ?: false
-                        val mapLink = doc.getString("map_link")?.takeIf { it.isNotBlank() }
+                    adapter.setItems(sorted)
+                    showEmptyState(sorted)
 
-                        val isComplete = doc.getBoolean("is_complete") ?: false
-
-                        val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
-                            val map = item as? Map<*, *>
-                            val url = map?.get("url") as? String
-                            val publicId = map?.get("public_id") as? String
-                            if (url != null && publicId != null) {
-                                UserImage(url, publicId)
-                            } else null
-                        } ?: emptyList()
-
-                        User(
-                            id = id,
-                            title = title,
-                            eventType = eventType,
-                            descriptions = descriptions,
-                            date = date,
-                            time = time,
-                            durationMinutes = duration,
-                            images = images,
-                            location = location,
-                            includeMapLink = includeMap,
-                            mapLink = mapLink,
-                            isComplete = isComplete
-                        )
-                    } catch (ex: Exception) {
-                        null
-                    }
                 }
-
-                // Filter by upcoming or completed
-                val filtered = if (showUpcomingFilter) {
-                    list.filter { !it.isComplete }   // upcoming = not complete
-                } else {
-                    list.filter { it.isComplete }    // show completed events
-                }
-
-                // Sort (upcoming earliest->latest, completed latest->oldest)
-                val sorted = if (showUpcomingFilter) {
-                    filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) }
-                } else {
-                    filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
-                }
-
-                adapter.setItems(sorted)
             }
     }
 
-    // ---------- Action handlers ----------
+    // ---------- One-shot fetch for initial load and swipe-to-refresh ----------
+
+    /**
+     * Fetch documents one-time (used for initial spinner load and manual refresh).
+     * onComplete is invoked in all cases (success/failure) so caller can hide spinner.
+     */
+    private fun fetchUsersOnce(onComplete: (() -> Unit)? = null) {
+        Log.d(TAG, "Performing one-shot fetchUsersOnce()")
+        db.collection("users")
+            .get()
+            .addOnSuccessListener { snaps ->
+                lifecycleScope.launch {
+                    val docs = snaps.documents
+                    val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
+
+                    val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
+                    val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
+
+                    adapter.setItems(sorted)
+                    showEmptyState(sorted)
+                    onComplete?.invoke()
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "fetchUsersOnce failed.", e)
+                Toast.makeText(requireContext(), "Refresh failed. ${e.message}", Toast.LENGTH_LONG).show()
+                onComplete?.invoke()
+            }
+    }
+
+    private fun setupSwipeRefresh() {
+        srl.setColorSchemeResources(
+            R.color.teal_200,
+            android.R.color.holo_blue_light,
+            android.R.color.holo_orange_light
+        )
+
+        srl.setOnRefreshListener {
+            if (!isNetworkAvailable()) {
+                srl.isRefreshing = false
+                Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+            } else {
+                // show spinner is already true here (SwipeRefreshLayout handles it)
+                fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+            }
+        }
+    }
+
+    // ---------- Shared doc->User mapping (extracted to reuse in both paths) ----------
+
+    private fun buildUsersFromDocs(docs: List<DocumentSnapshot>): List<User> {
+        return docs.mapNotNull { doc ->
+            try {
+                val id = doc.id
+                val title = doc.getString("title") ?: "No title"
+                val eventType = doc.getString("event_type") ?: "Other"
+                val descriptions =
+                    (doc.get("descriptions") as? Map<*, *>)?.mapNotNull { entry ->
+                        val k = entry.key as? String
+                        val v = entry.value as? String
+                        if (k != null && v != null) k to v else null
+                    }?.toMap() ?: emptyMap()
+
+                val date = doc.getString("date") ?: ""
+                val time = doc.getString("time") ?: ""
+                val duration = doc.getLong("duration_minutes")?.toInt()
+                val location = doc.getString("location")
+
+                val includeMap = doc.getBoolean("include_map_link") ?: false
+                val mapLink = doc.getString("map_link")?.takeIf { it.isNotBlank() }
+
+                val isComplete = doc.getBoolean("is_complete") ?: false
+
+                val images = (doc.get("images") as? List<*>)?.mapNotNull { item ->
+                    val map = item as? Map<*, *>
+                    val url = map?.get("url") as? String
+                    val publicId = map?.get("public_id") as? String
+                    if (url != null && publicId != null) {
+                        UserImage(url, publicId)
+                    } else null
+                } ?: emptyList()
+
+                User(
+                    id = id,
+                    title = title,
+                    eventType = eventType,
+                    descriptions = descriptions,
+                    date = date,
+                    time = time,
+                    durationMinutes = duration,
+                    images = images,
+                    location = location,
+                    includeMapLink = includeMap,
+                    mapLink = mapLink,
+                    isComplete = isComplete
+                )
+            } catch (ex: Exception) {
+                null
+            }
+        }
+    }
+
+    // ---------- Action handlers (unchanged) ----------
 
     private fun openEditFragment(user: User) {
         val fragment = EditUserFragment().apply {
@@ -229,7 +322,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         }
                         .addOnFailureListener { e ->
                             progressDialog.dismiss()
-                            Log.w("AllUsersFragment", "Error deleting", e)
+                            Log.w(TAG, "Error deleting", e)
                             Toast.makeText(requireContext(), "Delete failed", Toast.LENGTH_SHORT).show()
                         }
                 }
@@ -245,7 +338,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             .create()
     }
 
-    // ---------- Utility methods (kept unchanged) ----------
+    // ---------- Utility methods ----------
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
@@ -277,7 +370,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                     val request = Request.Builder()
                         .url(deleteImage_url!!)
                         .post(body)
-                        .addHeader("x-api-key", imageCloudApiKey!!) // match your Render env var
+                        .addHeader("x-api-key", imageCloudApiKey!!)
                         .build()
 
                     val response = client.newCall(request).execute()
@@ -289,6 +382,27 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             } catch (e: Exception) {
                 false
             }
+        }
+    }
+
+    /** Network availability helper (copied from your other fragment) */
+    private fun isNetworkAvailable(): Boolean {
+        val cm = requireContext().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nw = cm.activeNetwork ?: return false
+            val actNw = cm.getNetworkCapabilities(nw) ?: return false
+            return when {
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> true
+                else -> false
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val nwInfo = cm.activeNetworkInfo ?: return false
+            @Suppress("DEPRECATION")
+            return nwInfo.isConnected
         }
     }
 }

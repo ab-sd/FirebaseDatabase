@@ -24,6 +24,14 @@
             android:background="#FFC107"
             android:padding="12dp">
 
+            <ImageView
+                android:id="@+id/iv_expand"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@android:drawable/arrow_down_float"
+                android:contentDescription="expand"
+                app:tint="@android:color/black" />
+
             <TextView
                 android:id="@+id/tv_name"
                 android:layout_width="0dp"
@@ -35,13 +43,7 @@
                 android:gravity="center"
                 android:text="" />
 
-            <ImageView
-                android:id="@+id/iv_expand"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@android:drawable/arrow_down_float"
-                android:contentDescription="expand"
-                app:tint="@android:color/white" />
+
         </LinearLayout>
 
         <TextView

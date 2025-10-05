@@ -1,10 +1,12 @@
 package com.example.basicfiredatabase
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.Button
@@ -12,6 +14,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.ActionBarDrawerToggle
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
@@ -124,8 +127,15 @@ class MainActivity : AppCompatActivity() {
 
     }
 
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        val handled = (ActionBarDrawerToggle(this, drawerLayout, R.string.open_drawer, R.string.close_drawer))
+        val handled = (ActionBarDrawerToggle(this, drawerLayout,
+            R.string.open_drawer,
+            R.string.close_drawer))
             .onOptionsItemSelected(item)
         return handled || super.onOptionsItemSelected(item)
     }
