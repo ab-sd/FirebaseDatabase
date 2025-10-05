@@ -17,10 +17,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.example.basicfiredatabase.LanguagePrefs
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.databinding.ItemUserBinding
 import com.example.basicfiredatabase.fragments.ImageViewerFragment
 import com.example.basicfiredatabase.models.User
+import com.example.basicfiredatabase.utils.DescriptionKeyMapper
+import com.example.basicfiredatabase.utils.EventTypeTranslator
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -47,7 +50,10 @@ class UserAdapter(
 
         private fun bindHeader(user: User) {
             binding.tvName.text = user.title
-            binding.tvEventType.text = user.eventType
+
+            // Use translator to show eventType in the user's selected app language.
+            binding.tvEventType.text = EventTypeTranslator.getLocalized(ctx, user.eventType)
+
 
             // Set expand icon image depending on expanded state (no rotation animation)
             val expandRes =
@@ -88,12 +94,16 @@ class UserAdapter(
 
 
         private fun bindSummary(user: User) {
-            // Preferred language for description
-            val prefs = ctx.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val preferredLang = prefs.getString("preferred_event_language", "primary") ?: "primary"
-            val descToShow =
-                user.descriptions[preferredLang] ?: user.descriptions.values.firstOrNull() ?: ""
-            binding.tvSummary.text = if (descToShow.isNotBlank()) descToShow else "No description"
+
+            // Map the app language (e.g. "en","af","zu") to Firestore keys ("primary","secondary","tertiary")
+            val descKey = DescriptionKeyMapper.mapLangToKey(LanguagePrefs.current())
+
+            // Because you said a description will always be present, we directly read and set it.
+            // (If you ever expect missing values, you can add safe fallbacks later.)
+            val descToShow = user.descriptions[descKey] ?: user.descriptions.values.first()
+
+            binding.tvSummary.text = descToShow
+
 
             // show only date in collapsed card (no time badge)
             val dateText = user.date.ifBlank { "No date set" }

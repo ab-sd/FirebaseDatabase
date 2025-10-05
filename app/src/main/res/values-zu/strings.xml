@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">BasicFireDatabase</string>
+    <string name="action_language">Ulimi</string>
+    <string name="lang_english">IsiNgisi</string>
+    <string name="lang_afrikaans">IsiAfrikaans</string>
+    <string name="lang_zulu">IsiZulu</string>
+
+    <string name="nav_add_event">Engeza Isigameko</string>
+    <string name="nav_view_events">Buka Imicimbi</string>
+    <string name="nav_view_gallery">Buka Igalari</string>
+
+    <string name="choose_language">Khetha ulimi</string>
+
+
+    <!-- event type resources (Zulu) -->
+    <string name="type_community_feeding_program">Uhlelo Lokudla Lomphakathi</string>
+    <string name="type_back_to_school_drive">Umkhankaso Wokubuyela Esikoleni</string>
+    <string name="type_childrens_health_and_wellness_fair">Imakethe Yezempilo Nezokuphila Zezingane</string>
+    <string name="type_sports_and_recreation_day">Usuku Lwezomdlalo Nokuzijabulisa</string>
+    <string name="type_community_clean_up_and_beautification">Ukuhlanzwa Nokuthuthukiswa Komphakathi</string>
+    <string name="type_food_and_hygiene_pack_distribution">Ukusatshalaliswa Kwamaphakethe Okudla Nokuhlanzeka</string>
+    <string name="type_emergency_relief_fundraising_event">Umcimbi Wokuqongelela Imali Wokusiza Ngokuphuthumayo</string>
+
+
+
+</resources>

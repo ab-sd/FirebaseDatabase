@@ -1,7 +1,7 @@
 package com.example.basicfiredatabase
 
-import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -22,23 +21,28 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.example.basicfiredatabase.fragments.AddUserFragment
-import com.example.basicfiredatabase.fragments.AllUsersFragment
 import com.example.basicfiredatabase.fragments.EventsFragment
 import com.example.basicfiredatabase.fragments.GalleryFragment
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.FirebaseApp
-import kotlin.text.replace
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var drawerLayout: DrawerLayout
+    private lateinit var drawerToggle: ActionBarDrawerToggle
     private val db by lazy { Firebase.firestore }
+
+    // Wrap the base context so resources use the selected locale
+    override fun attachBaseContext(newBase: Context) {
+        val lang = LanguagePrefs.current() // LanguagePrefs should be initialized in MyApplication.onCreate()
+        val wrapped = LocaleHelper.wrapContext(newBase, lang)
+        super.attachBaseContext(wrapped)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
 
         // make content draw behind system bars so we can control padding precisely
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -47,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         setContentView(R.layout.activity_main)
-        
+
         drawerLayout = findViewById(R.id.drawer_layout)
         val appBarLayout = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.appBarLayout)
         val fragmentContainer = findViewById<FrameLayout>(R.id.fragment_container)
@@ -75,7 +79,6 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-
         // init firebase
         FirebaseApp.initializeApp(this)
 
@@ -83,12 +86,11 @@ class MainActivity : AppCompatActivity() {
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
 
-        val navView = findViewById<com.google.android.material.navigation.NavigationView>(R.id.nav_view)
+        val navView = findViewById<NavigationView>(R.id.nav_view)
 
-        val toggle =
-            ActionBarDrawerToggle(this, drawerLayout, R.string.open_drawer, R.string.close_drawer)
-        drawerLayout.addDrawerListener(toggle)
-        toggle.syncState()
+        drawerToggle = ActionBarDrawerToggle(this, drawerLayout, R.string.open_drawer, R.string.close_drawer)
+        drawerLayout.addDrawerListener(drawerToggle)
+        drawerToggle.syncState()
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         navView.setNavigationItemSelectedListener { item ->
@@ -109,7 +111,6 @@ class MainActivity : AppCompatActivity() {
                     drawerLayout.closeDrawer(GravityCompat.START)
                     true
                 }
-
                 R.id.nav_gallery -> {
                     supportFragmentManager.beginTransaction()
                         .replace(R.id.fragment_container, GalleryFragment())
@@ -121,25 +122,44 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
-
-
-
-
     }
 
+    // Inflate the top-right overflow menu (res/menu/main_menu.xml)
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
     }
 
+    // Handle drawer toggle and language menu items
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        val handled = (ActionBarDrawerToggle(this, drawerLayout,
-            R.string.open_drawer,
-            R.string.close_drawer))
-            .onOptionsItemSelected(item)
-        return handled || super.onOptionsItemSelected(item)
+        // let the drawer toggle handle the hamburger first
+        if (drawerToggle.onOptionsItemSelected(item)) return true
+
+        return when (item.itemId) {
+            R.id.action_lang_en -> {
+                changeLanguage("en")
+                true
+            }
+            R.id.action_lang_af -> {
+                changeLanguage("af")
+                true
+            }
+            R.id.action_lang_zu -> {
+                changeLanguage("zu")
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
+    private fun changeLanguage(langCode: String) {
+        // persist new language and recreate activity so resources are reloaded
+        LanguagePrefs.setLanguage(applicationContext, langCode)
 
+        // show a small, immediate confirmation (not localized since recreation happens right after)
+        Toast.makeText(this, "Language: $langCode", Toast.LENGTH_SHORT).show()
 
+        // recreate the activity so UI strings (and drawer menu strings) re-inflate with new locale
+        recreate()
+    }
 }

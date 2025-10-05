@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">BasicFireDatabase</string>
+    <string name="action_language">Taal</string>
+    <string name="lang_english">Engels</string>
+    <string name="lang_afrikaans">Afrikaans</string>
+    <string name="lang_zulu">Zulu</string>
+
+    <string name="nav_add_event">Voeg Gebeurtenis</string>
+    <string name="nav_view_events">Wys Gebeurtenisse</string>
+    <string name="nav_view_gallery">Wys Galery</string>
+
+    <string name="choose_language">Kies taal</string>
+
+
+    <!-- event type resources (Afrikaans) -->
+    <string name="type_community_feeding_program">Gemeenskaps-voedingsprogram</string>
+    <string name="type_back_to_school_drive">Terug-na-skool-insamelingsveldtog</string>
+    <string name="type_childrens_health_and_wellness_fair">Kindergesondheid en Welstandfees</string>
+    <string name="type_sports_and_recreation_day">Sport- en Ontspanningsdag</string>
+    <string name="type_community_clean_up_and_beautification">Gemeenskaps Skoonmaak en Verfraaiing</string>
+    <string name="type_food_and_hygiene_pack_distribution">Distribusie van Kos- en Higiënepakkies</string>
+    <string name="type_emergency_relief_fundraising_event">Noodhulpfonds-insameling</string>
+
+
+
+</resources>

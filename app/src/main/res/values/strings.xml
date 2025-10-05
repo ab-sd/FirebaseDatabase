@@ -1,10 +1,37 @@
 <resources>
     <string name="app_name">BasicFireDatabase</string>
     <!-- TODO: Remove or change this placeholder text -->
-    <string name="hello_blank_fragment">Hello blank fragment</string>
-    <string name="open_drawer">Open navigation</string>
-    <string name="close_drawer">Close navigation</string>
-    <string name="selected_image">Selected image</string>
-    <string name="remove_image">remove image</string>
+    <string name="hello_blank_fragment" translatable="false">Hello blank fragment</string>
+    <string name="open_drawer" translatable="false">Open navigation</string>
+    <string name="close_drawer" translatable="false">Close navigation</string>
+    <string name="selected_image" translatable="false">Selected image</string>
+    <string name="remove_image" translatable="false">remove image</string>
+
+
+    <!-- top-right menu -->
+    <string name="action_language" translatable="false">Language</string>
+    <string name="lang_english">English</string>
+    <string name="lang_afrikaans">Afrikaans</string>
+    <string name="lang_zulu">Zulu</string>
+
+    <!-- navigation drawer items (move hardcoded text from your nav menu into strings) -->
+    <string name="nav_add_event">Add Event</string>
+    <string name="nav_view_events">View Events</string>
+    <string name="nav_view_gallery">View Gallery</string>
+
+    <!-- dialog title -->
+    <string name="choose_language">Choose language</string>
+
+
+    <!-- event type resources (English) -->
+    <string name="type_community_feeding_program">Community Feeding Program</string>
+    <string name="type_back_to_school_drive">Back-to-School Drive</string>
+    <string name="type_childrens_health_and_wellness_fair">Children’s Health and Wellness Fair</string>
+    <string name="type_sports_and_recreation_day">Sports and Recreation Day</string>
+    <string name="type_community_clean_up_and_beautification">Community Clean-Up and Beautification</string>
+    <string name="type_food_and_hygiene_pack_distribution">Food and Hygiene Pack Distribution</string>
+    <string name="type_emergency_relief_fundraising_event">Emergency Relief Fundraising Event</string>
+
+
 
 </resources>
