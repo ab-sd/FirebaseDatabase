@@ -12,14 +12,18 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.UserAdapter
+import com.example.basicfiredatabase.databinding.FragmentAllUsersBinding
 import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.models.UserImage
+import com.example.basicfiredatabase.utils.NetworkUtils.isNetworkAvailable
+import com.example.basicfiredatabase.viewmodels.EventsViewModel
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
@@ -47,11 +51,21 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         }
     }
 
+    private var _binding: FragmentAllUsersBinding? = null
+    private val binding get() = _binding!!
+
+
     private val TAG = "AllUsersFragment"
     private val db = Firebase.firestore
-    private lateinit var rv: RecyclerView
-    private lateinit var srl: SwipeRefreshLayout
-    private lateinit var tvEmpty: TextView
+
+
+    // Shared ViewModel (scoped to activity so both pages share it)
+    private val eventsViewModel: EventsViewModel by activityViewModels()
+
+    // fragmentId used to identify which fragment initiated the reload ("upcoming" or "completed")
+    private val fragmentId: String by lazy { if (showUpcomingFilter) "upcoming" else "completed" }
+
+
 
 
     private val showUpcomingFilter: Boolean by lazy { arguments?.getBoolean(ARG_SHOW_UPCOMING) ?: true }
@@ -68,9 +82,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        rv = view.findViewById(R.id.rv_users)
-        srl = view.findViewById(R.id.srl_users)
-        tvEmpty = view.findViewById(R.id.tv_empty)
+
+        _binding = FragmentAllUsersBinding.bind(view)
 
 
         setupRecyclerView()
@@ -80,20 +93,39 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         // Add swipe-to-refresh
         setupSwipeRefresh()
 
+
+        // observe shared reload trigger — reload only when origin != this fragment
+        eventsViewModel.reloadTrigger.observe(viewLifecycleOwner) { pair ->
+            val (originId, _) = pair
+            if (originId != fragmentId) {
+                // another fragment asked for reload — refresh our data (no further triggers)
+                if (isAdded) {
+                    // keep user experience consistent: show swipe refresh spinner while loading
+                    binding.srlUsers.isRefreshing = true
+                    fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
+                }
+            }
+        }
+
+
         // Start realtime listener (keeps UI up-to-date)
-        startUsersListener()
+//        startUsersListener()
 
         // initial one-shot load (shows spinner on open); spinner will be stopped in onComplete
-        if (!isNetworkAvailable()) {
+        val hasNetwork = isNetworkAvailable(requireContext())
+        // disable swipe refresh if offline to prevent user from attempting to refresh while offline
+        binding.srlUsers.isEnabled = hasNetwork
+
+        if (!hasNetwork) {
             // show cached data (if any) but inform the user we're offline and stop spinner
-            srl.isRefreshing = false
+            binding.srlUsers.isRefreshing = false
             Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
             // still attempt a one-shot fetch to surface cached results (optional)
-            fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+            fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
         } else {
             // online: show spinner and fetch
-            srl.isRefreshing = true
-            fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+            binding.srlUsers.isRefreshing = true
+            fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
         }
 
     }
@@ -101,17 +133,23 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     // ---------- Setup helpers ----------
 
     private fun setupRecyclerView() {
-        rv.layoutManager = LinearLayoutManager(requireContext())
-        rv.adapter = adapter
+        binding.rvUsers.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvUsers.adapter = adapter
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 
     private fun applyWindowInsetsToRecyclerView() {
-        ViewCompat.setOnApplyWindowInsetsListener(rv) { v, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rvUsers) { v, insets ->
             val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBottom + dpToPx(8))
             insets
         }
     }
+
 
     private fun setupRemoteConfig() {
         val remoteConfig = Firebase.remoteConfig
@@ -130,43 +168,43 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     private fun showEmptyState(items: List<User>) {
         if (items.isEmpty()) {
             val message = if (showUpcomingFilter) "No upcoming events" else "No past events"
-            tvEmpty.text = message
-            tvEmpty.visibility = View.VISIBLE
-            rv.visibility = View.GONE
+            binding.tvEmpty.text = message
+            binding.tvEmpty.visibility = View.VISIBLE
+            binding.rvUsers.visibility = View.GONE
         } else {
-            tvEmpty.visibility = View.GONE
-            rv.visibility = View.VISIBLE
+            binding.tvEmpty.visibility = View.GONE
+            binding.rvUsers.visibility = View.VISIBLE
         }
     }
 
 
-    /**
-     * Real-time listener that updates UI whenever Firestore changes.
-     * Refactored to reuse buildUsersFromDocs for consistent mapping logic.
-     */
-    private fun startUsersListener() {
-        db.collection("users")
-            .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.w(TAG, "Listen failed.", e)
-                    return@addSnapshotListener
-                }
-                if (snapshots == null) return@addSnapshotListener
-
-                lifecycleScope.launch {
-                    val docs = snapshots.documents
-                    val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
-
-                    // Filter + sort exactly as before
-                    val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
-                    val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
-
-                    adapter.setItems(sorted)
-                    showEmptyState(sorted)
-
-                }
-            }
-    }
+//    /**
+//     * Real-time listener that updates UI whenever Firestore changes.
+//     * Refactored to reuse buildUsersFromDocs for consistent mapping logic.
+//     */
+//    private fun startUsersListener() {
+//        db.collection("users")
+//            .addSnapshotListener { snapshots, e ->
+//                if (e != null) {
+//                    Log.w(TAG, "Listen failed.", e)
+//                    return@addSnapshotListener
+//                }
+//                if (snapshots == null) return@addSnapshotListener
+//
+//                lifecycleScope.launch {
+//                    val docs = snapshots.documents
+//                    val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
+//
+//                    // Filter + sort exactly as before
+//                    val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
+//                    val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
+//
+//                    adapter.setItems(sorted)
+//                    showEmptyState(sorted)
+//
+//                }
+//            }
+//    }
 
     // ---------- One-shot fetch for initial load and swipe-to-refresh ----------
 
@@ -199,19 +237,21 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     }
 
     private fun setupSwipeRefresh() {
-        srl.setColorSchemeResources(
+        binding.srlUsers.setColorSchemeResources(
             R.color.teal_200,
             android.R.color.holo_blue_light,
             android.R.color.holo_orange_light
         )
 
-        srl.setOnRefreshListener {
-            if (!isNetworkAvailable()) {
-                srl.isRefreshing = false
+        binding.srlUsers.setOnRefreshListener {
+            if (!isNetworkAvailable(requireContext())) {
+                binding.srlUsers.isRefreshing = false
                 Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
             } else {
                 // show spinner is already true here (SwipeRefreshLayout handles it)
-                fetchUsersOnce(onComplete = { if (isAdded) srl.isRefreshing = false })
+                fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
+
+                eventsViewModel.triggerReload(fragmentId)
             }
         }
     }
@@ -384,25 +424,5 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             }
         }
     }
-
-    /** Network availability helper (copied from your other fragment) */
-    private fun isNetworkAvailable(): Boolean {
-        val cm = requireContext().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val nw = cm.activeNetwork ?: return false
-            val actNw = cm.getNetworkCapabilities(nw) ?: return false
-            return when {
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> true
-                else -> false
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            val nwInfo = cm.activeNetworkInfo ?: return false
-            @Suppress("DEPRECATION")
-            return nwInfo.isConnected
-        }
     }
-}
+

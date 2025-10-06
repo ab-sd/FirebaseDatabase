@@ -252,7 +252,7 @@ android:dividerPadding="12dp">
     <com.google.android.material.textfield.TextInputEditText
         android:id="@+id/et_duration"
         android:inputType="number"
-        android:hint="Enter the expected duration of the event"
+        android:hint="Enter the expected duration of the event (minutes)"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 </com.google.android.material.textfield.TextInputLayout>
@@ -323,14 +323,6 @@ android:dividerPadding="12dp">
     </LinearLayout>
 
 
-
-    <!-- Upcoming (hidden by default, always yes) -->
-<Switch
-    android:id="@+id/switch_is_complete"
-    android:visibility="gone"
-    android:checked="false"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content" />
 
 <!-- Image picker -->
     <com.google.android.material.button.MaterialButton

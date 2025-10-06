@@ -323,31 +323,57 @@
 
 
         <!-- Hide Upcoming Switch -->
-        <!-- Upcoming Switch (moved up & styled) -->
+        <!-- Event Status Switch -->
         <LinearLayout
-            android:layout_marginTop="20dp"
+            android:id="@+id/layout_event_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:padding="8dp"
-            android:background="#FFF8E1">
+            android:padding="12dp"
+            android:background="@drawable/switch_container_bg"
+            android:clickable="true"
+            android:focusable="true">
 
-            <TextView
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_event_status"
+                android:layout_marginEnd="12dp"
+                app:tint="#F9A825" />
+
+            <LinearLayout
                 android:layout_width="0dp"
-                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:text="Mark event as completed"
-                android:textColor="#F57F17"
-                android:textStyle="bold"
-                android:textSize="16sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_event_status_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Event Status"
+                    android:textStyle="bold"
+                    android:textColor="#F57F17"
+                    android:textSize="16sp"/>
+
+                <TextView
+                    android:id="@+id/tv_event_status_subtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Mark this event as completed when it’s no longer upcoming"
+                    android:textColor="#616161"
+                    android:textSize="13sp"/>
+            </LinearLayout>
 
             <Switch
                 android:id="@+id/switch_edit_is_complete"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:checked="false" />
+                android:checked="false"/>
         </LinearLayout>
+
 
 
         <!-- image pick + count -->

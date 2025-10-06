@@ -16,6 +16,7 @@ import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.adapters.GalleryAdapter
 import com.example.basicfiredatabase.models.GalleryItem
 import com.example.basicfiredatabase.databinding.FragmentGalleryBinding
+import com.example.basicfiredatabase.utils.NetworkUtils.isNetworkAvailable
 import com.google.firebase.firestore.Query
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -97,7 +98,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         )
 
         binding.srlGallery.setOnRefreshListener {
-            if (!isNetworkAvailable()) {
+            if (!isNetworkAvailable(requireContext())) {
                 binding.srlGallery.isRefreshing = false
                 Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
             } else {
@@ -298,26 +299,6 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         }
     }
 
-    /** Network availability helper */
-    private fun isNetworkAvailable(): Boolean {
-        val cm = requireContext().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val nw = cm.activeNetwork ?: return false
-            val actNw = cm.getNetworkCapabilities(nw) ?: return false
-            return when {
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> true
-                else -> false
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            val nwInfo = cm.activeNetworkInfo ?: return false
-            @Suppress("DEPRECATION")
-            return nwInfo.isConnected
-        }
-    }
 
     override fun onDestroyView() {
         super.onDestroyView()

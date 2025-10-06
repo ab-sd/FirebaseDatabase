@@ -93,6 +93,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentEditUserBinding.bind(view)
 
+
         // --- high-level orchestration only ---
         setupInsetsAndFocus()
         setupRemoteConfig()
@@ -252,6 +253,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         // Forward clicks from container and arrow to the spinner so whole area opens the dropdown
         binding.spinnerEditContainer.setOnClickListener {
             binding.spinnerEditEventType.performClick()
+        }
+
+        binding.layoutEventStatus.setOnClickListener {
+            binding.switchEditIsComplete.toggle()
         }
 
     }
@@ -726,6 +731,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         } else {
             null
         }
+
+
 
         val isComplete = binding.switchEditIsComplete.isChecked
 

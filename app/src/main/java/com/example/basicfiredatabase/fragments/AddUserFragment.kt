@@ -472,7 +472,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             val time = binding.tvEventTime.text?.toString()?.trim() ?: ""
             val location = binding.etLocation.text?.toString()?.trim() ?: ""
             val durationMinutes = binding.etDuration.text?.toString()?.toIntOrNull()
-            val isComplete = binding.switchIsComplete.isChecked
+            val isComplete = false
 
             // map link data
             val (includeMapLink, mapLink) = getMapLinkData()
@@ -642,7 +642,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 binding.tvEventTime.text = "Select time"
                 binding.etDuration.text?.clear()
                 binding.etLocation.text?.clear()
-                binding.switchIsComplete.isChecked = false
 
 
                 // reset map link UI
