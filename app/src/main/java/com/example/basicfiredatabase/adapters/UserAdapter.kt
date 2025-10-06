@@ -17,13 +17,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
-import com.example.basicfiredatabase.LanguagePrefs
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.databinding.ItemUserBinding
 import com.example.basicfiredatabase.fragments.ImageViewerFragment
 import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.utils.DescriptionKeyMapper
 import com.example.basicfiredatabase.utils.EventTypeTranslator
+import com.example.basicfiredatabase.utils.LanguagePrefs
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar

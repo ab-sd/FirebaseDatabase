@@ -494,6 +494,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             lp.setMargins(marginPx, marginPx, marginPx, marginPx)
             frame.layoutParams = lp
 
+            //Adding to see if it focuses on uploading images after hitting save button
+            frame.isFocusable = true
+            frame.isFocusableInTouchMode = true
+
             val iv = frame.findViewById<ImageView>(R.id.item_iv)
             val removeBtn = frame.findViewById<ImageButton>(R.id.item_remove)
             val progress = frame.findViewById<ProgressBar>(R.id.item_progress)
@@ -581,6 +585,16 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                         if (visible) {
                             // progress.parent should be the FrameLayout inflated for that item
                             val itemView = progress.parent as? View ?: return@launchWhenStarted
+
+
+                            //Adding to see if it focuses on uploading images after hitting save button
+// request focus on the item (so keyboard focus stays away from inputs)
+                            itemView.isFocusable = true
+                            itemView.isFocusableInTouchMode = true
+                            itemView.requestFocus()
+
+
+
                             // post to ensure measured/laid-out values are available
                             binding.hsvEditImages.post {
                                 // center the item in the HSV (so it's clearly visible)
@@ -716,15 +730,50 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         binding.etBtnCancel.isEnabled = false
 
 
-        // Clear focus to avoid focus change scrolling to an image view
-        binding.root.requestFocus()
+//        // Clear focus to avoid focus change scrolling to an image view
+//        binding.root.requestFocus()
+//        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+//        imm?.hideSoftInputFromWindow(binding.root.windowToken, 0)
+
+        //Adding to see if it focuses on uploading images after hitting save button
+        //Above commented code was to test this
+        // --- Make image area take focus so it stays visible while uploading ---
+        binding.hsvEditImages.isFocusable = true
+        binding.hsvEditImages.isFocusableInTouchMode = true
+
+// Request focus on HSV (so other EditText focus handlers won't kick in)
+        binding.hsvEditImages.requestFocus()
+
+// optionally clear focus from EditTexts (without focusing root)
+        val focusableFields = listOf(
+            binding.etEditTitle,
+            binding.etEditDescriptionPrimary,
+            binding.etEditDescriptionSecondary,
+            binding.etEditDescriptionTertiary,
+            binding.etEditDuration,
+            binding.etEditLocation,
+            binding.etEditMapLink
+        )
+        focusableFields.forEach { it.clearFocus() }
+
+// hide keyboard (use a specific window token; using an EditText token is safer)
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.hideSoftInputFromWindow(binding.root.windowToken, 0)
+        imm?.hideSoftInputFromWindow(binding.etEditTitle.windowToken, 0)
+
+// finally, make sure HSV scrolls to the end so uploaded items are visible
+        binding.hsvEditImages.post {
+            binding.hsvEditImages.smoothScrollTo(binding.llEditImages.measuredWidth, 0)
+        }
+
+
+
 
 
         // DO NOT show the big pbUpdate yet — let per-image progress be visible during uploads.
 
         lifecycleScope.launchWhenStarted {
+            var updateSucceeded = false
+
             try {
                 // 1) upload new images (per-image progress/UI and horizontal auto-scroll will still be visible)
                 val uploadedNewImages = if (newImageUris.isNotEmpty()) {
@@ -776,6 +825,11 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 // IMPORTANT: await the update task so we keep pbUpdate visible until Firestore finishes
                 db.collection("users").document(docId).update(updateMap).await()
 
+
+// mark success — do NOT pop the fragment here
+                updateSucceeded = true
+
+
                 // success path (update UI on main)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(requireContext(), "Updated", Toast.LENGTH_SHORT).show()
@@ -803,6 +857,12 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     binding.etBtnCancel.isEnabled = true
 
                 }
+
+                // Now finally pop the fragment **after** UI cleaned up and only if update succeeded
+                if (updateSucceeded && isAdded) {
+                    parentFragmentManager.popBackStack()
+                }
+
             }
         }
     }
