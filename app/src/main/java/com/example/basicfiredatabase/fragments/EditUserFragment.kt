@@ -3,6 +3,7 @@ package com.example.basicfiredatabase.fragments
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.res.Resources
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
@@ -125,7 +126,11 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             field.setOnFocusChangeListener { v, hasFocus ->
                 if (hasFocus) {
                     currentFocusedView = v
-                    v.postDelayed({ scrollToView(binding.scrollViewEdit, v, dpToPx(12)) }, 120)
+                    v.postDelayed({
+                        // guard: bail out if view destroyed or fragment not attached to UI
+                        if (_binding == null || !isAdded) return@postDelayed
+                        scrollToView(binding.scrollViewEdit, v, dpToPx(12))
+                    }, 120)
                 }
             }
             field.setOnClickListener { v ->
@@ -289,7 +294,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         renderImages()
 
         binding.hsvEditImages.post {
-            // scroll to the end of the linear layout so new images are visible
+            if (_binding == null || !isAdded) return@post
             binding.hsvEditImages.smoothScrollTo(binding.llEditImages.measuredWidth, 0)
         }
     }
@@ -984,7 +989,12 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
 
 
-    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+    private fun dpToPx(dp: Int): Int {
+        val density = view?.resources?.displayMetrics?.density
+            ?: _binding?.root?.resources?.displayMetrics?.density
+            ?: Resources.getSystem().displayMetrics.density
+        return (dp * density).toInt()
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()
