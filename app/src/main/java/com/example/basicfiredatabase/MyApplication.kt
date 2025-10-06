@@ -1,6 +1,7 @@
 package com.example.basicfiredatabase
 
 import android.app.Application
+import com.example.basicfiredatabase.utils.LanguagePrefs
 
 class MyApplication : Application() {
     override fun onCreate() {

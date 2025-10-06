@@ -24,6 +24,7 @@ import com.example.basicfiredatabase.utils.ImageUploadService
 import com.example.basicfiredatabase.utils.TranslationHelper
 import com.example.basicfiredatabase.utils.TranslationHelper.pasteFromClipboard
 import com.example.basicfiredatabase.utils.HorizontalSpaceItemDecoration
+import com.example.basicfiredatabase.utils.MAX_IMAGES
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.remoteconfig.ktx.remoteConfig
@@ -236,9 +237,9 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         }
 
         // How many more can we add?
-        val remaining = 10 - selectedImageUris.size
+        val remaining = MAX_IMAGES - selectedImageUris.size
         if (remaining <= 0) {
-            Toast.makeText(requireContext(), "Maximum 10 images allowed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Maximum $MAX_IMAGES images allowed", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -248,14 +249,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         // Inform user if we dropped some selected items
         if (newUnique.size > toAdd.size) {
             Toast.makeText(requireContext(),
-                "Only ${toAdd.size} added — maximum 10 images allowed",
+                "Only ${toAdd.size} added — maximum $MAX_IMAGES images allowed",
                 Toast.LENGTH_SHORT).show()
         }
 
         imageAdapter.submitList(selectedImageUris.toList()) {
             // run after DiffUtil commit — force RecyclerView to re-layout and redraw
             binding.recyclerSelectedImages.post {
-                // Option A: force a full refresh (safe for <=10 items)
+                // Option A: force a full refresh (safe for <=15 items)
                 imageAdapter.notifyDataSetChanged()
 
                 // Optionally: ensure decorations/layout updated
@@ -263,7 +264,7 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 binding.recyclerSelectedImages.requestLayout()
             }
         }
-        binding.tvImagesCount.text = "${selectedImageUris.size} / 10 images selected"
+        binding.tvImagesCount.text = "${selectedImageUris.size} / $MAX_IMAGES images selected"
         updateImageCountUI(binding.tvImagesCount, binding.btnPickImages)
     }
 
@@ -658,8 +659,8 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     }
 
     fun updateImageCountUI(tv: TextView, btnPick: Button) {
-        tv.text = if (selectedImageUris.isEmpty()) "No images selected" else "${selectedImageUris.size} / 10 images selected"
-        btnPick.isEnabled = selectedImageUris.size < 10
+        tv.text = if (selectedImageUris.isEmpty()) "No images selected" else "${selectedImageUris.size} / $MAX_IMAGES images selected"
+        btnPick.isEnabled = selectedImageUris.size < MAX_IMAGES
     }
 
 

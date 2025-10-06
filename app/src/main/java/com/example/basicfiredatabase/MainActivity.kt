@@ -23,6 +23,8 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.example.basicfiredatabase.fragments.AddUserFragment
 import com.example.basicfiredatabase.fragments.EventsFragment
 import com.example.basicfiredatabase.fragments.GalleryFragment
+import com.example.basicfiredatabase.utils.LanguagePrefs
+import com.example.basicfiredatabase.utils.LocaleHelper
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore

@@ -22,6 +22,7 @@ import com.bumptech.glide.Glide
 import com.example.basicfiredatabase.R
 import com.example.basicfiredatabase.databinding.FragmentEditUserBinding
 import com.example.basicfiredatabase.utils.ImageUploadService
+import com.example.basicfiredatabase.utils.MAX_IMAGES
 import com.example.basicfiredatabase.utils.TranslationHelper
 import com.example.basicfiredatabase.utils.TranslationHelper.pasteFromClipboard
 import com.google.firebase.firestore.ktx.firestore
@@ -278,9 +279,9 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     private fun handlePickedImages(uris: List<Uri>?) {
         if (uris == null || uris.isEmpty()) return
         val currentTotal = existingImages.size + newImageUris.size
-        val spaceLeft = maxOf(0, 10 - currentTotal)
+        val spaceLeft = maxOf(0, MAX_IMAGES - currentTotal)
         if (spaceLeft <= 0) {
-            Toast.makeText(requireContext(), "Maximum 10 images allowed", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Maximum $MAX_IMAGES images allowed", Toast.LENGTH_SHORT).show()
             return
         }
         val toAdd = uris.take(spaceLeft)
@@ -551,9 +552,9 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         // update count text
         val total = existingImages.size + newImageUris.size
         binding.tvEditImagesCount.text =
-            if (total == 0) "No images" else "$total / 10 images"
+            if (total == 0) "No images" else "$total / $MAX_IMAGES images"
 
-        binding.btnPickMoreImages.isEnabled = total < 10
+        binding.btnPickMoreImages.isEnabled = total < MAX_IMAGES
     }
 
 

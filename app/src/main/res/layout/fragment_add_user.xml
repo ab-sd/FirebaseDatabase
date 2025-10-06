@@ -317,7 +317,7 @@ android:dividerPadding="12dp">
     android:layout_height="wrap_content"
     android:backgroundTint="#FBC02D"
     android:textColor="#000"
-    android:text="Pick Images (max 10)"/>
+    android:text="Pick Images (max 15)"/>
 
 <TextView
     android:id="@+id/tv_images_count"

@@ -1,4 +1,4 @@
-package com.example.basicfiredatabase
+package com.example.basicfiredatabase.utils
 
 import android.content.Context
 import android.content.SharedPreferences

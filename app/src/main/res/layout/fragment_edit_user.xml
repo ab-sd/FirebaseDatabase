@@ -334,7 +334,7 @@
             android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Add Images (max 10)"
+            android:text="Add Images (max 15)"
             android:backgroundTint="#FBC02D"
             android:textColor="#000000"
             android:padding="10dp"/>
