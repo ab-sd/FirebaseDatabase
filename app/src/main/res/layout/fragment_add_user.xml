@@ -40,11 +40,34 @@ android:dividerPadding="12dp">
     android:textStyle="bold"
     android:layout_marginTop="12dp"/>
 
-<Spinner
-    android:id="@+id/spinner_event_type"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:backgroundTint="#FBC02D"/>
+    <FrameLayout
+        android:id="@+id/spinner_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:foreground="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:padding="0dp">
+
+        <!-- Your spinner (match_parent so it occupies whole area) -->
+        <Spinner
+            android:id="@+id/spinner_event_type"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/spinner_background_selector"
+            android:popupBackground="@drawable/spinner_box_filled"
+            android:paddingStart="4dp"
+            android:paddingEnd="44dp" /> <!-- give space on the right for the icon -->
+
+        <!-- Arrow icon overlaid on the right -->
+        <ImageView
+            android:id="@+id/spinner_arrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center|end"
+            android:layout_marginEnd="12dp"
+            android:src="@drawable/ic_arrow_drop_down"  />
+    </FrameLayout>
 
 <!-- Event Description -->
 <TextView

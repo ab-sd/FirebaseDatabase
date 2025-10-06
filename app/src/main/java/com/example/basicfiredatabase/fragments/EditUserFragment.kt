@@ -241,11 +241,19 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             "Sports and Recreation Day",
             "Community Clean-Up and Beautification",
             "Food and Hygiene Pack Distribution",
-            "Emergency Relief Fundraising Event",
-            "Other"
+            "Emergency Relief Fundraising Event"
         )
-        binding.spinnerEditEventType.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, types)
+
+        // Use your custom layouts for the closed view and dropdown items
+        val adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, types)
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerEditEventType.adapter = adapter
+
+        // Forward clicks from container and arrow to the spinner so whole area opens the dropdown
+        binding.spinnerEditContainer.setOnClickListener {
+            binding.spinnerEditEventType.performClick()
+        }
+
     }
 
     private fun setupPickAndUpdateHandlers() {

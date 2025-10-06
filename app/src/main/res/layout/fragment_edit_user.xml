@@ -35,11 +35,33 @@
             android:textColor="#F57F17"
             android:textStyle="bold" />
 
-        <Spinner
-            android:id="@+id/spinner_edit_event_type"
+        <FrameLayout
+            android:id="@+id/spinner_edit_container"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#FBC02D" />
+            android:layout_height="48dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="0dp">
+
+            <Spinner
+                android:id="@+id/spinner_edit_event_type"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/spinner_background_selector"
+                android:popupBackground="@drawable/spinner_box_filled"
+                android:paddingStart="4dp"
+                android:paddingEnd="44dp" /> <!-- leave room for arrow -->
+
+            <ImageView
+                android:id="@+id/spinner_edit_arrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center|end"
+                android:layout_marginEnd="12dp"
+                android:src="@drawable/ic_arrow_drop_down" />
+        </FrameLayout>
+
 
         <!-- Event Description (primary) -->
         <TextView

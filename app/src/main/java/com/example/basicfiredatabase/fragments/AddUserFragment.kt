@@ -140,8 +140,13 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
     }
 
     private fun setupSpinner() {
-        binding.spinnerEventType.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, TYPES.toList())
+        val adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, TYPES.toList())
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerEventType.adapter = adapter
+
+        binding.spinnerContainer.setOnClickListener {
+            binding.spinnerEventType.performClick()
+        }
     }
 
 
