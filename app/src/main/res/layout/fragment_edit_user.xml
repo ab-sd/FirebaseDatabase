@@ -351,15 +351,22 @@
 
 
         <!-- image pick + count -->
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_pick_more_images"
-            android:layout_marginTop="16dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Add Images (max 15)"
-            android:backgroundTint="#FBC02D"
-            android:textColor="#000000"
-            android:padding="10dp"/>
+            android:layout_marginTop="16dp"
+            android:padding="12dp"
+            android:layout_gravity="center"
+            android:text="Pick Images (max 15)"
+            android:textColor="@color/button_text"
+            android:backgroundTint="@color/button_tint"
+            app:icon="@drawable/ic_camera"
+            app:iconTint="@color/button_text"
+            app:iconSize="25dp"
+            app:iconPadding="8dp"
+            app:cornerRadius="5dp"
+            app:iconGravity="textStart" />
 
         <TextView
             android:id="@+id/tv_edit_images_count"
@@ -403,21 +410,6 @@
         android:gravity="center_vertical">
 
         <Button
-            android:id="@+id/btn_update"
-            android:text="Save Event Details"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#FBC02D"
-            android:textColor="#FFF" />
-
-
-        <!-- spacing between buttons -->
-        <Space
-            android:layout_width="8dp"
-            android:layout_height="wrap_content" />
-
-        <Button
             android:id="@+id/et_btn_cancel"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -425,6 +417,20 @@
             android:backgroundTint="#BDBDBD"
             android:textColor="#000"
             android:text="Cancel" />
+
+        <!-- spacing between buttons -->
+        <Space
+            android:layout_width="8dp"
+            android:layout_height="wrap_content" />
+
+        <Button
+            android:id="@+id/btn_update"
+            android:text="Save Event Details"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#F57F17"
+            android:textColor="#FFF" />
 
     </LinearLayout>
 
