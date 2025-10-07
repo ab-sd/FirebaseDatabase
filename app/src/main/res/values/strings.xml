@@ -33,5 +33,7 @@
     <string name="type_emergency_relief_fundraising_event">Emergency Relief Fundraising Event</string>
 
 
+    <!--    Displaying min for View Event cards-->
+    <string name="minutes_short">imiphumela</string>
 
 </resources>

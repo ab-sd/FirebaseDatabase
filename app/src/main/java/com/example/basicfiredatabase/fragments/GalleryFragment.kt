@@ -37,6 +37,10 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
     private val db = Firebase.firestore
     private lateinit var adapter: GalleryAdapter
 
+    // throttle to avoid spamming toasts during repeated refresh attempts
+    private var lastToastAt: Long = 0L
+    private val TOAST_THROTTLE_MS = 5_000L // 5 seconds
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -100,7 +104,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         binding.srlGallery.setOnRefreshListener {
             if (!isNetworkAvailable(requireContext())) {
                 binding.srlGallery.isRefreshing = false
-                Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+                showThrottledToast("No internet connection")
             } else {
                 // show spinner (user initiated) and load, stopping spinner in onComplete
                 binding.srlGallery.isRefreshing = true
@@ -133,7 +137,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
                     if (galleryItems.isEmpty()) {
                         binding.rvGallery.visibility = View.GONE
-                        Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
+                        showThrottledToast("No gallery images found")
                     } else {
                         binding.rvGallery.visibility = View.VISIBLE
                         adapter.submitList(galleryItems)
@@ -183,7 +187,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
                     if (ordered.isEmpty()) {
                         binding.rvGallery.visibility = View.GONE
-                        Toast.makeText(requireContext(), "No gallery images found", Toast.LENGTH_SHORT).show()
+                        showThrottledToast("No gallery images found")
                     } else {
                         binding.rvGallery.visibility = View.VISIBLE
                         adapter.submitList(ordered)
@@ -296,6 +300,15 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
             sdf.parse(combined)?.time ?: 0L
         } catch (e: Exception) {
             0L
+        }
+    }
+
+    private fun showThrottledToast(message: String) {
+        if (!isAdded) return
+        val now = System.currentTimeMillis()
+        if (now - lastToastAt >= TOAST_THROTTLE_MS) {
+            lastToastAt = now
+            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
         }
     }
 

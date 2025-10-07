@@ -22,5 +22,8 @@
     <string name="type_emergency_relief_fundraising_event">Noodhulpfonds-insameling</string>
 
 
+    <!--    Displaying min for View Event cards-->
+    <string name="minutes_short">min</string>
+
 
 </resources>

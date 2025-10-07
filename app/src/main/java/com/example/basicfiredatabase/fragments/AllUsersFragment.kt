@@ -65,7 +65,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     // fragmentId used to identify which fragment initiated the reload ("upcoming" or "completed")
     private val fragmentId: String by lazy { if (showUpcomingFilter) "upcoming" else "completed" }
 
-
+    // throttle offline toast so it doesn't spam
+    private var lastOfflineToastAt: Long = 0L
+    private val OFFLINE_TOAST_THROTTLE_MS = 5_000L // 5 seconds
 
 
     private val showUpcomingFilter: Boolean by lazy { arguments?.getBoolean(ARG_SHOW_UPCOMING) ?: true }
@@ -114,12 +116,12 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         // initial one-shot load (shows spinner on open); spinner will be stopped in onComplete
         val hasNetwork = isNetworkAvailable(requireContext())
         // disable swipe refresh if offline to prevent user from attempting to refresh while offline
-        binding.srlUsers.isEnabled = hasNetwork
+        binding.srlUsers.isEnabled = true
 
         if (!hasNetwork) {
-            // show cached data (if any) but inform the user we're offline and stop spinner
+            // show cached data (if any) but inform the user we're offline
             binding.srlUsers.isRefreshing = false
-            Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+            showOfflineToastIfNeeded()
             // still attempt a one-shot fetch to surface cached results (optional)
             fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
         } else {
@@ -236,6 +238,17 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             }
     }
 
+    private fun showOfflineToastIfNeeded() {
+        if (!isAdded) return
+        val now = System.currentTimeMillis()
+        if (now - lastOfflineToastAt >= OFFLINE_TOAST_THROTTLE_MS) {
+            lastOfflineToastAt = now
+            // short toast to reduce time on screen and reduce annoyance
+            Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
     private fun setupSwipeRefresh() {
         binding.srlUsers.setColorSchemeResources(
             R.color.teal_200,
@@ -246,7 +259,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         binding.srlUsers.setOnRefreshListener {
             if (!isNetworkAvailable(requireContext())) {
                 binding.srlUsers.isRefreshing = false
-                Toast.makeText(requireContext(), "No internet connection", Toast.LENGTH_SHORT).show()
+                showOfflineToastIfNeeded()
             } else {
                 // show spinner is already true here (SwipeRefreshLayout handles it)
                 fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
