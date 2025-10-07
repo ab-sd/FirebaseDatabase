@@ -28,6 +28,19 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
     companion object {
         private const val TAG = "GalleryFragment"
+        private const val ARG_FOCUS_EVENT_ID = "focus_event_id"
+
+        /**
+         * Create a GalleryFragment. When focusEventId is non-null, the fragment will show images
+         * only for that single event (and will fetch only that document for speed).
+         */
+        fun newInstance(focusEventId: String? = null): GalleryFragment {
+            val f = GalleryFragment()
+            if (!focusEventId.isNullOrBlank()) {
+                f.arguments = Bundle().apply { putString(ARG_FOCUS_EVENT_ID, focusEventId) }
+            }
+            return f
+        }
     }
 
 
@@ -115,17 +128,54 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
 
     /**
-     * Load past events (is_complete == true), try server-side ordering first.
+     * Load past events (is_complete == true).
+     * If a focusEventId argument is present, fetch only that single document (faster).
      * onComplete is invoked when the load finishes (success or failure) so caller can hide spinner.
      */
     private fun loadPastEventsImages(onComplete: (() -> Unit)? = null) {
+        val focusEventId = arguments?.getString(ARG_FOCUS_EVENT_ID)
         val fieldName = "is_complete"
+
+        // If a specific event id was provided, fetch only that document (recommended for performance).
+        if (!focusEventId.isNullOrBlank()) {
+            Log.d(TAG, "Loading gallery for single event id: $focusEventId")
+
+            db.collection("users").document(focusEventId).get()
+                .addOnSuccessListener { docSnap ->
+                    lifecycleScope.launch {
+                        val galleryItems = withContext(Dispatchers.Default) {
+                            // buildGalleryItemsFromDocs expects a list of DocumentSnapshot
+                            if (docSnap.exists()) buildGalleryItemsFromDocs(listOf(docSnap)) else mutableListOf()
+                        }
+
+                        if (galleryItems.isEmpty()) {
+                            binding.rvGallery.visibility = View.GONE
+                            showThrottledToast("No images available for this event")
+                            adapter.submitList(emptyList())
+                        } else {
+                            binding.rvGallery.visibility = View.VISIBLE
+                            adapter.submitList(galleryItems)
+                        }
+
+                        onComplete?.invoke()
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Failed to load focused event $focusEventId", e)
+                    Toast.makeText(requireContext(), "Failed loading images for event", Toast.LENGTH_LONG).show()
+                    onComplete?.invoke()
+                }
+
+            return
+        }
+
+        // Default behavior: fetch all completed events (try server-side ordering first)
         val colRef = db.collection("users")
             .whereEqualTo(fieldName, true)
             .orderBy("date", Query.Direction.DESCENDING)
             .orderBy("time", Query.Direction.DESCENDING)
 
-        Log.d(TAG, "Loading past events: server-ordered query on $fieldName = false, ordered by date/time desc")
+        Log.d(TAG, "Loading past events: server-ordered query on $fieldName = true, ordered by date/time desc")
 
         colRef.get()
             .addOnSuccessListener { snaps ->
@@ -156,7 +206,6 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                 val url = msg?.let { """https?://\S+""".toRegex().find(it)?.value }
                 if (!url.isNullOrBlank()) {
                     Log.w(TAG, "Possible Firestore index URL: $url")
-
                 }
 
                 // Inform user/dev
@@ -169,6 +218,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                 fetchAndSortClientSide(onComplete)
             }
     }
+
 
     /** Fallback: fetch whereEqualTo only, then sort client-side (newest first) */
     private fun fetchAndSortClientSide(onComplete: (() -> Unit)? = null) {

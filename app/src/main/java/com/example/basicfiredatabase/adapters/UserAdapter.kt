@@ -4,11 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
 import android.net.Uri
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.Animation
 import android.view.animation.AnimationUtils
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -24,11 +25,9 @@ import com.example.basicfiredatabase.models.User
 import com.example.basicfiredatabase.utils.DescriptionKeyMapper
 import com.example.basicfiredatabase.utils.EventTypeTranslator
 import com.example.basicfiredatabase.utils.LanguagePrefs
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-
 
 class UserAdapter(
     private val items: MutableList<User> = mutableListOf(),
@@ -40,30 +39,29 @@ class UserAdapter(
         private val ctx: Context get() = binding.root.context
 
         fun bind(user: User, position: Int) {
-            bindHeader(user)
-            bindSummary(user)
-            bindDetails(user)
-            bindLocation(user)
-            bindImages(user)
-            bindActions(user, position)
+            // Wrap calls in with(binding) to use viewbinding properties directly
+            with(binding) {
+                bindHeader(user)
+                bindSummary(user)
+                bindDetails(user)
+                bindLocation(user)
+                bindImages(user)
+                bindActions(user, position)
+            }
         }
 
-        private fun bindHeader(user: User) {
-            binding.tvName.text = user.title
+        private fun bindHeader(user: User) = with(binding) {
+            tvName.text = user.title
+            tvEventType.text = EventTypeTranslator.getLocalized(ctx, user.eventType)
 
-            // Use translator to show eventType in the user's selected app language.
-            binding.tvEventType.text = EventTypeTranslator.getLocalized(ctx, user.eventType)
-
-
-            // Set expand icon image depending on expanded state (no rotation animation)
             val expandRes =
                 if (user.expanded) R.drawable.ic_chevron_down else R.drawable.ic_chevron_right
-            binding.ivExpand.setImageResource(expandRes)
-            binding.ivExpand.imageTintList = null
+            ivExpand.setImageResource(expandRes)
+            ivExpand.imageTintList = null
 
             // Thumbnail (first image) - show only for upcoming events, when images exist,
-            // and when the card is COLLAPSED. We keep the same fade-in/out behavior you had.
-            val iv = binding.ivThumbnail
+            // and when the card is COLLAPSED.
+            val iv = ivThumbnail
             val shouldShowThumb = !user.isComplete && !user.expanded && user.images.isNotEmpty()
 
             if (shouldShowThumb) {
@@ -92,94 +90,152 @@ class UserAdapter(
             }
         }
 
-
-        private fun bindSummary(user: User) {
-
-            // Map the app language (e.g. "en","af","zu") to Firestore keys ("primary","secondary","tertiary")
+        private fun bindSummary(user: User) = with(binding) {
             val descKey = DescriptionKeyMapper.mapLangToKey(LanguagePrefs.current())
+            val descToShow = user.descriptions[descKey] ?: user.descriptions.values.firstOrNull().orEmpty()
+            tvSummary.text = descToShow
 
-            // Because you said a description will always be present, we directly read and set it.
-            // (If you ever expect missing values, you can add safe fallbacks later.)
-            val descToShow = user.descriptions[descKey] ?: user.descriptions.values.first()
-
-            binding.tvSummary.text = descToShow
-
-
-            // show only date in collapsed card (no time badge)
             val dateText = user.date.ifBlank { "No date set" }
-            binding.tvDate.text = dateText
-
-            // ensure time badge (if present elsewhere) isn't used in collapsed UI:
-            // (we removed the tv_time view from layout, so no binding.tvTime usage here)
+            tvDate.text = dateText
         }
 
-        private fun bindDetails(user: User) {
+        private fun bindDetails(user: User) = with(binding) {
             val durationMinutes = user.durationMinutes ?: 0
+            val btnViewImages = btnViewImages // viewbinding property
 
-            // fallback text
-            var timeRangeText = if (durationMinutes > 0) "${durationMinutes} min" else "N/A"
+            if (user.isComplete) {
+                // Completed events: hide time and duration UI, and images area
+                tvTimeRange.visibility = View.GONE
+                ivDurationBox.visibility = View.GONE
 
-            val timePattern = "HH:mm" // adjust if your stored format differs
-            val sdf = SimpleDateFormat(timePattern, Locale.getDefault())
-            sdf.isLenient = false
+                imagesLabelContainer.visibility = View.GONE
+                llImages.removeAllViews()
+                llImages.visibility = View.GONE
 
-            try {
-                val startStr = user.time
-                if (!startStr.isNullOrBlank()) {
-                    val startDate = sdf.parse(startStr) // Date
-                    if (startDate != null) {
-                        val cal = Calendar.getInstance()
-                        cal.time = startDate
+                // Configure View Images button appearance and enabled state (reset for recycled views)
+                btnViewImages.apply {
+                    alpha = 1f
+                    isEnabled = true
+                    isClickable = true
+                    setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
+                }
 
-                        // compute end time by adding minutes
-                        val endCal = cal.clone() as Calendar
-                        endCal.add(Calendar.MINUTE, durationMinutes)
-
-                        val startFormatted = sdf.format(cal.time)
-                        val endFormatted = sdf.format(endCal.time)
-                        timeRangeText = "$startFormatted \u2013 $endFormatted (${durationMinutes} min)"
+                if (user.images.isNullOrEmpty()) {
+                    btnViewImages.apply {
+                        text = "No images available"
+                        isEnabled = false
+                        isClickable = false
+                        setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_broken_image, 0, 0, 0)
+                        alpha = 0.6f
+                        try {
+                            backgroundTintList = ContextCompat.getColorStateList(ctx, android.R.color.darker_gray)
+                        } catch (e: Exception) { /* ignore */ }
+                    }
+                } else {
+                    btnViewImages.apply {
+                        text = "View images"
+                        isEnabled = true
+                        isClickable = true
+                        alpha = 1f
+                        setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_gallery, 0, 0, 0)
+                        compoundDrawablePadding = (8 * ctx.resources.displayMetrics.density).toInt()
+                        try {
+                            backgroundTintList = ContextCompat.getColorStateList(ctx, R.color.teal_200)
+                        } catch (e: Exception) { /* ignore */ }
                     }
                 }
-            } catch (ex: ParseException) {
-                if (durationMinutes > 0) timeRangeText = "${durationMinutes} min" else timeRangeText = "N/A"
-            } catch (ex: Exception) {
-                if (durationMinutes > 0) timeRangeText = "${durationMinutes} min" else timeRangeText = "N/A"
+
+                // Show the button only when expanded
+                btnViewImages.visibility = if (user.expanded) View.VISIBLE else View.GONE
+
+            } else {
+                // Upcoming event: compute time range and show details as before
+                val timePattern = "HH:mm"
+                val sdf = SimpleDateFormat(timePattern, Locale.getDefault()).apply { isLenient = false }
+
+                var timeRangeText = if (durationMinutes > 0) "${durationMinutes} min" else "N/A"
+                try {
+                    val startStr = user.time
+                    if (!startStr.isNullOrBlank()) {
+                        val startDate = sdf.parse(startStr)
+                        if (startDate != null) {
+                            val cal = Calendar.getInstance().apply { time = startDate }
+                            val endCal = cal.clone() as Calendar
+                            endCal.add(Calendar.MINUTE, durationMinutes)
+                            val startFormatted = sdf.format(cal.time)
+                            val endFormatted = sdf.format(endCal.time)
+                            timeRangeText = "$startFormatted \u2013 $endFormatted (${durationMinutes} min)"
+                        }
+                    }
+                } catch (ex: Exception) {
+                    timeRangeText = if (durationMinutes > 0) "${durationMinutes} min" else "N/A"
+                }
+
+                tvTimeRange.apply {
+                    text = timeRangeText
+                    visibility = if (user.expanded) View.VISIBLE else View.GONE
+                }
+                ivDurationBox.visibility = if (user.expanded) View.VISIBLE else View.GONE
+
+                imagesLabelContainer.visibility =
+                    if (user.expanded && user.images.isNotEmpty() && !user.isComplete) View.VISIBLE else View.GONE
+
+                if (!user.expanded || user.images.isEmpty() || user.isComplete) {
+                    llImages.removeAllViews()
+                    llImages.visibility = View.GONE
+                } else {
+                    llImages.visibility = View.VISIBLE
+                    // bindImages will populate when called from bind()
+                }
+
+                // hide view images button for upcoming events
+                btnViewImages.visibility = View.GONE
             }
 
-            binding.root.findViewById<TextView>(R.id.tv_time_range)?.text = timeRangeText
-
-            // keep hidden tvDetails text for compatibility
             val status = if (!user.isComplete) "Upcoming" else "Completed"
             val durationText = if (durationMinutes > 0) "$durationMinutes min" else "N/A"
-            binding.tvDetails.text = buildString {
+            tvDetails.text = buildString {
                 append("Type: ${user.eventType}\n")
                 append("Duration: $durationText\n")
                 append("Status: $status")
             }
 
-            binding.llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
+            llDetails.visibility = if (user.expanded) View.VISIBLE else View.GONE
         }
 
-        private fun bindLocation(user: User) {
-            val tvLocation: TextView? = binding.root.findViewById(R.id.tv_location)
+        private fun bindLocation(user: User) = with(binding) {
+            // If tvLocation / ivLocationBox exist in layout they are available via binding
             val locationText = user.location ?: "N/A"
 
-            tvLocation?.let { tv ->
-                tv.text = locationText
+            tvLocation.apply {
+                text = locationText
+                // reset state for recycled views
+                setOnClickListener(null)
+                isClickable = false
+                isFocusable = false
+                visibility = if (user.expanded) View.VISIBLE else View.GONE
+                paintFlags = paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
+                setTextColor(ContextCompat.getColor(ctx, android.R.color.black))
+            }
 
-                // Reset state (important for recycling)
-                tv.setOnClickListener(null)
-                tv.isClickable = false
-                tv.isFocusable = false
-                tv.visibility = if (user.expanded) View.VISIBLE else View.GONE
-                tv.paintFlags = tv.paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
-                tv.setTextColor(ContextCompat.getColor(ctx, android.R.color.black))
+            ivLocationBox.visibility = if (user.expanded) View.VISIBLE else View.GONE
 
-                // If there is a map link — make it look clickable and open it
-                if (!user.mapLink.isNullOrBlank()) {
-                    tv.paintFlags = tv.paintFlags or Paint.UNDERLINE_TEXT_FLAG
-                    tv.setTextColor(ContextCompat.getColor(ctx, android.R.color.holo_blue_dark))
-                    tv.setOnClickListener {
+            // If the event is completed, hide location entirely and return
+            if (user.isComplete) {
+                tvLocation.visibility = View.GONE
+                ivLocationBox.visibility = View.GONE
+                return
+            }
+
+            val shouldShow = user.expanded
+            tvLocation.visibility = if (shouldShow) View.VISIBLE else View.GONE
+            ivLocationBox.visibility = if (shouldShow) View.VISIBLE else View.GONE
+
+            if (shouldShow && !user.mapLink.isNullOrBlank()) {
+                tvLocation.apply {
+                    paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG
+                    setTextColor(ContextCompat.getColor(ctx, android.R.color.holo_blue_dark))
+                    setOnClickListener {
                         try {
                             val uri = Uri.parse(user.mapLink)
                             val intent = Intent(Intent.ACTION_VIEW, uri)
@@ -188,20 +244,18 @@ class UserAdapter(
                             Toast.makeText(ctx, "Unable to open link", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    tv.isClickable = true
-                    tv.isFocusable = true
+                    isClickable = true
+                    isFocusable = true
                 }
             }
         }
 
-        private fun bindImages(user: User) {
+        private fun bindImages(user: User) = with(binding) {
             // clear old image views
-            binding.llImages.removeAllViews()
+            llImages.removeAllViews()
 
-            // show/hide the "Images" label only when expanded, not completed, and images exist
-            binding.imagesLabelContainer.visibility =
+            imagesLabelContainer.visibility =
                 if (user.expanded && user.images.isNotEmpty() && !user.isComplete) View.VISIBLE else View.GONE
-
 
             if (!user.expanded || user.images.isEmpty() || user.isComplete) return
 
@@ -229,25 +283,59 @@ class UserAdapter(
                         .commit()
                 }
 
-                binding.llImages.addView(iv)
+                llImages.addView(iv)
             }
         }
 
-        private fun bindActions(user: User, position: Int) {
-            // Toggle expand/collapse when row is clicked. No rotation animation; just swap icon on rebind.
-            binding.root.setOnClickListener {
+        private fun bindActions(user: User, position: Int) = with(binding) {
+            // Toggle expand/collapse when row is clicked.
+            root.setOnClickListener {
                 user.expanded = !user.expanded
-                // immediately update this item so bindHeader runs and sets the correct chevron + thumbnail state
                 this@UserAdapter.notifyItemChanged(position)
             }
 
-            binding.btnEdit.setOnClickListener { onEdit(user) }
-            binding.btnDelete.setOnClickListener { onDelete(user) }
+            btnEdit.setOnClickListener { onEdit(user) }
+            btnDelete.setOnClickListener { onDelete(user) }
+
+            // Safe handler for the "View images" button (uses binding btnViewImages)
+            btnViewImages.setOnClickListener { btn ->
+                // Defensive: do nothing if disabled (recycled views may leak old listeners)
+                if (!btn.isEnabled) return@setOnClickListener
+
+                val activity = ctx as? AppCompatActivity
+                if (activity == null) {
+                    Toast.makeText(ctx, "Unable to open gallery", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                try {
+                    // Preferred: open GalleryFragment filtered to this event
+                    val frag = com.example.basicfiredatabase.fragments.GalleryFragment.newInstance(user.id)
+                    activity.supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, frag)
+                        .addToBackStack(null)
+                        .commit()
+                } catch (ex: NoSuchMethodError) {
+                    // Fallback to ImageViewer if GalleryFragment.newInstance(...) is not present
+                    if (user.images.isNullOrEmpty()) {
+                        Toast.makeText(ctx, "No images available", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    val urls = user.images.map { it.url }
+                    val frag = ImageViewerFragment.newInstance(urls, 0)
+                    activity.supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, frag)
+                        .addToBackStack(null)
+                        .commit()
+                } catch (e: Exception) {
+                    Toast.makeText(ctx, "Could not open images", Toast.LENGTH_SHORT).show()
+                    Log.w("UserAdapter", "Error opening images for event ${user.id}", e)
+                }
+            }
         }
     }
 
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val binding = ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return VH(binding)
     }

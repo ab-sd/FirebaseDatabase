@@ -88,6 +88,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         _binding = FragmentAllUsersBinding.bind(view)
 
 
+
         setupRecyclerView()
         applyWindowInsetsToRecyclerView()
         setupRemoteConfig()
@@ -130,6 +131,40 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
         }
 
+        setupHeader()
+
+
+    }
+
+    private fun setupHeader() {
+        // Controls: card_header, tv_header_title, tv_header_desc, btn_header_cta
+        val card = binding.cardHeader
+        val title = binding.tvHeaderTitle
+        val desc = binding.tvHeaderDesc
+        val cta = binding.btnHeaderCta
+
+        if (showUpcomingFilter) {
+            // Example upcoming header text
+            title.text = "Upcoming events"
+            desc.text = "Here are events scheduled soon. Tap a card to see details."
+            cta.visibility = View.GONE  // no CTA for upcoming
+            card.visibility = View.VISIBLE
+        } else {
+            // Past events header with CTA to open full gallery
+            title.text = "Past events"
+            desc.text = "Tap 'View images' on an event to see images for that event, or open the full gallery below."
+            cta.visibility = View.VISIBLE
+            card.visibility = View.VISIBLE
+
+            cta.setOnClickListener {
+                // Open full gallery (unfiltered)
+                val frag = com.example.basicfiredatabase.fragments.GalleryFragment.newInstance(null)
+                requireActivity().supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragment_container, frag)
+                    .addToBackStack("gallery_all_past")
+                    .commit()
+            }
+        }
     }
 
     // ---------- Setup helpers ----------

@@ -35,5 +35,7 @@
 
     <!--    Displaying min for View Event cards-->
     <string name="minutes_short">imiphumela</string>
+    <string name="open_gallery">Open Gallery</string>
+    <string name="action_gallery_label">All Past Images</string>
 
 </resources>
