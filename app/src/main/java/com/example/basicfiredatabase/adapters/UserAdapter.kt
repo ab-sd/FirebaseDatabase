@@ -62,7 +62,7 @@ class UserAdapter(
             // Thumbnail (first image) - show only for upcoming events, when images exist,
             // and when the card is COLLAPSED.
             val iv = ivThumbnail
-            val shouldShowThumb = !user.isComplete && !user.expanded && user.images.isNotEmpty()
+            val shouldShowThumb = shouldShowThumbnail(user)
 
             if (shouldShowThumb) {
                 Glide.with(ctx)
@@ -351,4 +351,17 @@ class UserAdapter(
         items.addAll(newItems)
         notifyDataSetChanged()
     }
+
+
+    companion object {
+        /**
+         * Pure logic helper used to decide whether the thumbnail should be visible.
+         * Kept here so existing code can call it (optional) and tests can exercise it.
+         */
+        @JvmStatic
+        fun shouldShowThumbnail(user: com.example.basicfiredatabase.models.User): Boolean {
+            return !user.isComplete && !user.expanded && !user.images.isNullOrEmpty()
+        }
+    }
+
 }

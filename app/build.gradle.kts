@@ -84,6 +84,8 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.9")
 
 
+    testImplementation("junit:junit:4.13.2")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
