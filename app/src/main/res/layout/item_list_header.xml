@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/header_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="?android:attr/windowBackground">
+
+    <TextView
+        android:id="@+id/tv_header_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Header title"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"/>
+
+    <!-- Big image placeholder box (takes space as if an image lives here) -->
+    <FrameLayout
+        android:id="@+id/fl_header_image"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_marginTop="12dp"
+        android:background="#E0E0E0">
+
+        <!-- Use an ImageView if you want to load a real image; placeholder is fine for now -->
+        <ImageView
+            android:id="@+id/iv_header_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="Header image"
+            android:src="@drawable/ic_placeholder" />
+
+        <!-- optional overlay text centered on placeholder -->
+        <TextView
+            android:id="@+id/tv_img_overlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="IMAGE"
+            android:textStyle="bold"
+            android:textColor="#99000000"
+            android:layout_gravity="center"/>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tv_header_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Header description goes here."
+        android:textSize="14sp"
+        android:textColor="#444444"/>
+
+    <Button
+        android:id="@+id/btn_header_cta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="#FF6347"
+        android:text="View all past images"
+        android:visibility="gone"/>
+</LinearLayout>

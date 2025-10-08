@@ -3,7 +3,10 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="teal_200">#03DAC5</color>
-    <color name="event_box_color">#333333</color> <!-- Dark gray -->
+    <color name="event_box_color">#333333</color>
+    <color name="tab_indicator">#FF5722</color>
+    <color name="selected_tab_text">#FF5722</color>
+    <color name="unselected_tab_text">#888888</color> <!-- Dark gray -->
 
 
 </resources>

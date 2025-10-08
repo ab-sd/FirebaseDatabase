@@ -37,6 +37,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:backgroundTint="#FF6347"
             android:text="View all past images"
             android:visibility="gone" />
 

@@ -14,10 +14,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.basicfiredatabase.R
+import com.example.basicfiredatabase.adapters.HeaderAdapter
+import com.example.basicfiredatabase.adapters.HeaderData
 import com.example.basicfiredatabase.adapters.UserAdapter
 import com.example.basicfiredatabase.databinding.FragmentAllUsersBinding
 import com.example.basicfiredatabase.models.User
@@ -59,6 +62,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     private var _binding: FragmentAllUsersBinding? = null
     private val binding get() = _binding!!
 
+    private lateinit var headerAdapter: HeaderAdapter
+
 
     private val TAG = "AllUsersFragment"
     private val db = Firebase.firestore
@@ -92,6 +97,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
         _binding = FragmentAllUsersBinding.bind(view)
 
+
+        binding.rvUsers.isNestedScrollingEnabled = true
 
 
         setupRecyclerView()
@@ -142,42 +149,47 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     }
 
     private fun setupHeader() {
-        // Controls: card_header, tv_header_title, tv_header_desc, btn_header_cta
-        val card = binding.cardHeader
-        val title = binding.tvHeaderTitle
-        val desc = binding.tvHeaderDesc
-        val cta = binding.btnHeaderCta
-
-        if (showUpcomingFilter) {
-            // Example upcoming header text
-            title.text = "Upcoming events"
-            desc.text = "Here are events scheduled soon. Tap a card to see details."
-            cta.visibility = View.GONE  // no CTA for upcoming
-            card.visibility = View.VISIBLE
+        val title = if (showUpcomingFilter) "View our current events" else "Below are our past events"
+        val desc = if (showUpcomingFilter) {
+            "Here are events scheduled soon. Tap a card to see details."
         } else {
-            // Past events header with CTA to open full gallery
-            title.text = "Past events"
-            desc.text = "Tap 'View images' on an event to see images for that event, or open the full gallery below."
-            cta.visibility = View.VISIBLE
-            card.visibility = View.VISIBLE
-
-            cta.setOnClickListener {
-                // Open full gallery (unfiltered)
-                val frag = com.example.basicfiredatabase.fragments.GalleryFragment.newInstance(null)
-                requireActivity().supportFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, frag)
-                    .addToBackStack("gallery_all_past")
-                    .commit()
-            }
+            "Tap 'View images' on an event to see images for that event, or open the full gallery below."
         }
+
+        headerAdapter.setData(HeaderData(
+            title = title,
+            description = desc,
+            showCta = !showUpcomingFilter,
+            ctaText = "View all past images"
+        ))
     }
+
 
     // ---------- Setup helpers ----------
 
     private fun setupRecyclerView() {
         binding.rvUsers.layoutManager = LinearLayoutManager(requireContext())
-        binding.rvUsers.adapter = adapter
+
+        // initial header data (will be updated in setupHeader)
+        val initialHeader = HeaderData(
+            title = if (showUpcomingFilter) "Upcoming events" else "Past events",
+            description = if (showUpcomingFilter) "Here are events scheduled soon. Tap a card to see details." else "Tap 'View images' on an event to see images for that event, or open the full gallery below.",
+            showCta = !showUpcomingFilter,
+            ctaText = "View all past images"
+        )
+        headerAdapter = HeaderAdapter(initialHeader) {
+            // CTA callback: open full gallery (same as your previous cta)
+            val frag = com.example.basicfiredatabase.fragments.GalleryFragment.newInstance(null)
+            requireActivity().supportFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, frag)
+                .addToBackStack("gallery_all_past")
+                .commit()
+        }
+
+        val concat = ConcatAdapter(headerAdapter, adapter)
+        binding.rvUsers.adapter = concat
     }
+
 
     override fun onDestroyView() {
         super.onDestroyView()
