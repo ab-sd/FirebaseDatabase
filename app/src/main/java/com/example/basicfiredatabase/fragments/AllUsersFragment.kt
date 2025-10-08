@@ -32,6 +32,7 @@ import com.google.firebase.remoteconfig.ktx.remoteConfig
 import com.google.firebase.remoteconfig.ktx.remoteConfigSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -41,6 +42,8 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.coroutines.resumeWithException
 
 class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
@@ -50,6 +53,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             arguments = Bundle().apply { putBoolean(ARG_SHOW_UPCOMING, showUpcoming) }
         }
     }
+
+    private var fetchJob: kotlinx.coroutines.Job? = null
 
     private var _binding: FragmentAllUsersBinding? = null
     private val binding get() = _binding!!
@@ -101,12 +106,12 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         eventsViewModel.reloadTrigger.observe(viewLifecycleOwner) { pair ->
             val (originId, _) = pair
             if (originId != fragmentId) {
-                // another fragment asked for reload — refresh our data (no further triggers)
-                if (isAdded) {
-                    // keep user experience consistent: show swipe refresh spinner while loading
-                    binding.srlUsers.isRefreshing = true
-                    fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
-                }
+                val b = _binding ?: return@observe
+                // Show swipe refresh spinner while loading
+                b.srlUsers.isRefreshing = true
+
+                // onComplete uses a safe call, not isAdded
+                fetchUsersOnce(onComplete = { _binding?.srlUsers?.isRefreshing = false })
             }
         }
 
@@ -176,6 +181,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        fetchJob?.cancel()            // cancel pending fetch so it doesn't try to touch UI later
+        fetchJob = null
+
         _binding = null
     }
 
@@ -195,6 +203,10 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
         remoteConfig.fetchAndActivate()
             .addOnCompleteListener { task ->
+
+                // bail if fragment has been detached
+                if (!isAdded) return@addOnCompleteListener
+
                 if (task.isSuccessful) {
                     deleteImage_url = remoteConfig.getString("deleteImage_url")
                     imageCloudApiKey = remoteConfig.getString("cloud_api_key")
@@ -203,16 +215,18 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     }
 
     private fun showEmptyState(items: List<User>) {
+        val b = _binding ?: return         // return early if view destroyed
         if (items.isEmpty()) {
             val message = if (showUpcomingFilter) "No upcoming events" else "No past events"
-            binding.tvEmpty.text = message
-            binding.tvEmpty.visibility = View.VISIBLE
-            binding.rvUsers.visibility = View.GONE
+            b.tvEmpty.text = message
+            b.tvEmpty.visibility = View.VISIBLE
+            b.rvUsers.visibility = View.GONE
         } else {
-            binding.tvEmpty.visibility = View.GONE
-            binding.rvUsers.visibility = View.VISIBLE
+            b.tvEmpty.visibility = View.GONE
+            b.rvUsers.visibility = View.VISIBLE
         }
     }
+
 
 
 //    /**
@@ -249,29 +263,52 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
      * Fetch documents one-time (used for initial spinner load and manual refresh).
      * onComplete is invoked in all cases (success/failure) so caller can hide spinner.
      */
+
+    // call this from onViewCreated or from swipe refresh etc.
     private fun fetchUsersOnce(onComplete: (() -> Unit)? = null) {
-        Log.d(TAG, "Performing one-shot fetchUsersOnce()")
-        db.collection("users")
-            .get()
-            .addOnSuccessListener { snaps ->
-                lifecycleScope.launch {
-                    val docs = snaps.documents
-                    val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
+        // cancel previous if running
+        fetchJob?.cancel()
 
-                    val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
-                    val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
+        // capture view scope early while view exists
+        val viewScope = viewLifecycleOwner.lifecycleScope
 
+        // start Task
+        val task = db.collection("users").get()
+        task.addOnSuccessListener { snaps ->
+            // launch work inside captured viewScope -> it will be cancelled when view is destroyed
+            fetchJob = viewScope.launch {
+                // heavy work off main thread
+                val docs = snaps.documents
+                val users = withContext(Dispatchers.Default) { buildUsersFromDocs(docs) }
+
+                val filtered = if (showUpcomingFilter) users.filter { !it.isComplete } else users.filter { it.isComplete }
+                val sorted = if (showUpcomingFilter) filtered.sortedBy { parseDateTimeOrEpoch(it.date, it.time) } else filtered.sortedByDescending { parseDateTimeOrEpoch(it.date, it.time) }
+
+                // final UI update on Main with binding guard
+                withContext(Dispatchers.Main) {
+                    val b = _binding ?: run {
+                        onComplete?.invoke()
+                        return@withContext
+                    }
                     adapter.setItems(sorted)
-                    showEmptyState(sorted)
+                    showEmptyState(sorted)   // make sure showEmptyState itself uses _binding guard
                     onComplete?.invoke()
                 }
             }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "fetchUsersOnce failed.", e)
-                Toast.makeText(requireContext(), "Refresh failed. ${e.message}", Toast.LENGTH_LONG).show()
+        }
+        task.addOnFailureListener { e ->
+            // use captured scope to report failure on main safely
+            fetchJob = viewScope.launch(Dispatchers.Main) {
+                if (_binding != null && isAdded) {
+                    Toast.makeText(requireContext(), "Refresh failed. ${e.message}", Toast.LENGTH_LONG).show()
+                }
                 onComplete?.invoke()
             }
+        }
     }
+
+
+
 
     private fun showOfflineToastIfNeeded() {
         if (!isAdded) return
@@ -285,24 +322,24 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
 
 
     private fun setupSwipeRefresh() {
-        binding.srlUsers.setColorSchemeResources(
+        val b = _binding ?: return
+        b.srlUsers.setColorSchemeResources(
             R.color.teal_200,
             android.R.color.holo_blue_light,
             android.R.color.holo_orange_light
         )
 
-        binding.srlUsers.setOnRefreshListener {
+        b.srlUsers.setOnRefreshListener {
             if (!isNetworkAvailable(requireContext())) {
-                binding.srlUsers.isRefreshing = false
+                b.srlUsers.isRefreshing = false
                 showOfflineToastIfNeeded()
             } else {
-                // show spinner is already true here (SwipeRefreshLayout handles it)
-                fetchUsersOnce(onComplete = { if (isAdded) binding.srlUsers.isRefreshing = false })
-
+                fetchUsersOnce(onComplete = { _binding?.srlUsers?.isRefreshing = false })
                 eventsViewModel.triggerReload(fragmentId)
             }
         }
     }
+
 
     // ---------- Shared doc->User mapping (extracted to reuse in both paths) ----------
 
@@ -393,7 +430,7 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             .setTitle("Delete Event")
             .setMessage("Are you sure you want to delete \"${user.title}\"?")
             .setPositiveButton("Yes") { _, _ ->
-                val progressDialog = createProgressDialog()
+                val progressDialog = createProgressDialog() ?: return@setPositiveButton
                 progressDialog.show()
 
                 lifecycleScope.launch {
@@ -419,12 +456,14 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             .show()
     }
 
-    private fun createProgressDialog(): AlertDialog {
-        return AlertDialog.Builder(requireContext())
+    private fun createProgressDialog(): AlertDialog? {
+        val ctx = context ?: return null
+        return AlertDialog.Builder(ctx)
             .setView(R.layout.dialog_progress)
             .setCancelable(false)
             .create()
     }
+
 
     // ---------- Utility methods ----------
 
@@ -448,6 +487,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     // delete helper (unchanged)
     private suspend fun deleteImagesFromCloudinary(images: List<UserImage>): Boolean {
         if (images.isEmpty()) return true
+        val url = deleteImage_url ?: return false
+        val key = imageCloudApiKey ?: return false
+
         return withContext(Dispatchers.IO) {
             try {
                 val client = OkHttpClient()
@@ -456,9 +498,9 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         .toRequestBody("application/json".toMediaTypeOrNull())
 
                     val request = Request.Builder()
-                        .url(deleteImage_url!!)
+                        .url(url)
                         .post(body)
-                        .addHeader("x-api-key", imageCloudApiKey!!)
+                        .addHeader("x-api-key", key)
                         .build()
 
                     val response = client.newCall(request).execute()
@@ -472,5 +514,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             }
         }
     }
-    }
+
+
+
+}
 
