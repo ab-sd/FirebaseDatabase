@@ -21,6 +21,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -43,6 +44,8 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         }
     }
 
+    // single Job covering the current fetch; cancelled when view destroyed or when a new fetch starts
+    private var fetchJob: Job? = null
 
     private var _binding: FragmentGalleryBinding? = null
     private val binding get() = _binding!!
@@ -133,43 +136,58 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
      * onComplete is invoked when the load finishes (success or failure) so caller can hide spinner.
      */
     private fun loadPastEventsImages(onComplete: (() -> Unit)? = null) {
+        // cancel any previous fetch job
+        fetchJob?.cancel()
+        val viewScope = viewLifecycleOwner.lifecycleScope
+
         val focusEventId = arguments?.getString(ARG_FOCUS_EVENT_ID)
         val fieldName = "is_complete"
 
-        // If a specific event id was provided, fetch only that document (recommended for performance).
         if (!focusEventId.isNullOrBlank()) {
             Log.d(TAG, "Loading gallery for single event id: $focusEventId")
 
             db.collection("users").document(focusEventId).get()
                 .addOnSuccessListener { docSnap ->
-                    lifecycleScope.launch {
+                    // launch inside captured view scope (will cancel if view destroyed)
+                    fetchJob = viewScope.launch {
                         val galleryItems = withContext(Dispatchers.Default) {
-                            // buildGalleryItemsFromDocs expects a list of DocumentSnapshot
                             if (docSnap.exists()) buildGalleryItemsFromDocs(listOf(docSnap)) else mutableListOf()
                         }
 
-                        if (galleryItems.isEmpty()) {
-                            binding.rvGallery.visibility = View.GONE
-                            showThrottledToast("No images available for this event")
-                            adapter.submitList(emptyList())
-                        } else {
-                            binding.rvGallery.visibility = View.VISIBLE
-                            adapter.submitList(galleryItems)
-                        }
+                        withContext(Dispatchers.Main) {
+                            val b = _binding ?: run {
+                                onComplete?.invoke()
+                                return@withContext
+                            }
 
-                        onComplete?.invoke()
+                            if (galleryItems.isEmpty()) {
+                                b.rvGallery.visibility = View.GONE
+                                showThrottledToast("No images available for this event")
+                                adapter.submitList(emptyList())
+                            } else {
+                                b.rvGallery.visibility = View.VISIBLE
+                                adapter.submitList(galleryItems)
+                            }
+
+                            onComplete?.invoke()
+                        }
                     }
                 }
                 .addOnFailureListener { e ->
                     Log.w(TAG, "Failed to load focused event $focusEventId", e)
-                    Toast.makeText(requireContext(), "Failed loading images for event", Toast.LENGTH_LONG).show()
-                    onComplete?.invoke()
+                    // show toast safely using viewScope
+                    viewScope.launch(Dispatchers.Main) {
+                        if (_binding != null && isAdded) {
+                            Toast.makeText(requireContext(), "Failed loading images for event", Toast.LENGTH_LONG).show()
+                        }
+                        onComplete?.invoke()
+                    }
                 }
 
             return
         }
 
-        // Default behavior: fetch all completed events (try server-side ordering first)
+        // Default behavior: server-ordered query
         val colRef = db.collection("users")
             .whereEqualTo(fieldName, true)
             .orderBy("date", Query.Direction.DESCENDING)
@@ -179,42 +197,49 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
         colRef.get()
             .addOnSuccessListener { snaps ->
-                // offload doc->items mapping to background thread to avoid UI jank
-                lifecycleScope.launch {
+                // capture view scope and launch mapping there
+                fetchJob = viewScope.launch {
                     val docs = snaps.documents
                     val galleryItems = withContext(Dispatchers.Default) { buildGalleryItemsFromDocs(docs) }
                     Log.d(TAG, "Server-ordered query succeeded. docs returned: ${docs.size}; gallery items: ${galleryItems.size}")
 
-                    if (galleryItems.isEmpty()) {
-                        binding.rvGallery.visibility = View.GONE
-                        showThrottledToast("No gallery images found")
-                    } else {
-                        binding.rvGallery.visibility = View.VISIBLE
-                        adapter.submitList(galleryItems)
-                    }
+                    withContext(Dispatchers.Main) {
+                        val b = _binding ?: run {
+                            onComplete?.invoke()
+                            return@withContext
+                        }
 
-                    onComplete?.invoke()
+                        if (galleryItems.isEmpty()) {
+                            b.rvGallery.visibility = View.GONE
+                            showThrottledToast("No gallery images found")
+                        } else {
+                            b.rvGallery.visibility = View.VISIBLE
+                            adapter.submitList(galleryItems)
+                        }
+
+                        onComplete?.invoke()
+                    }
                 }
             }
             .addOnFailureListener { e ->
-                // Log full error + stacktrace so you can inspect index / permission errors in Logcat
                 Log.w(TAG, "Server-ordered query failed.", e)
                 val msg = e?.message
                 Log.w(TAG, "Failure message: $msg")
 
-                // If Firestore requires a composite index it often includes a console URL in the message.
                 val url = msg?.let { """https?://\S+""".toRegex().find(it)?.value }
                 if (!url.isNullOrBlank()) {
                     Log.w(TAG, "Possible Firestore index URL: $url")
                 }
 
-                // Inform user/dev
-                Toast.makeText(requireContext(), "Server query failed. Falling back to client-side fetch.", Toast.LENGTH_LONG).show()
+                // Inform user + stop spinner on main thread using viewScope
+                viewScope.launch(Dispatchers.Main) {
+                    if (_binding != null && isAdded) {
+                        Toast.makeText(requireContext(), "Server query failed. Falling back to client-side fetch.", Toast.LENGTH_LONG).show()
+                    }
+                    onComplete?.invoke()
+                }
 
-                // important: always call onComplete so any refresh spinner is stopped
-                onComplete?.invoke()
-
-                // fallback to client-side fetch+sort
+                // fallback to client-side fetch (also uses viewScope and fetchJob)
                 fetchAndSortClientSide(onComplete)
             }
     }
@@ -222,35 +247,52 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
     /** Fallback: fetch whereEqualTo only, then sort client-side (newest first) */
     private fun fetchAndSortClientSide(onComplete: (() -> Unit)? = null) {
+        // cancel existing and capture scope
+        fetchJob?.cancel()
+        val viewScope = viewLifecycleOwner.lifecycleScope
+
         val fieldName = "is_complete"
-        Log.d(TAG, "FALLBACK: fetching docs with $fieldName = false and sorting client-side")
+        Log.d(TAG, "FALLBACK: fetching docs with $fieldName = true and sorting client-side")
 
         db.collection("users")
             .whereEqualTo(fieldName, true)
             .get()
             .addOnSuccessListener { snaps ->
-                lifecycleScope.launch {
+                fetchJob = viewScope.launch {
                     val docs = snaps.documents
                     val galleryItems = withContext(Dispatchers.Default) { buildGalleryItemsFromDocs(docs) }
-                    val ordered = orderGalleryItemsByEventDateDesc(galleryItems)
+                    val ordered = withContext(Dispatchers.Default) { orderGalleryItemsByEventDateDesc(galleryItems) }
                     Log.d(TAG, "Fallback gallery items built (after sort): ${ordered.size}")
 
-                    if (ordered.isEmpty()) {
-                        binding.rvGallery.visibility = View.GONE
-                        showThrottledToast("No gallery images found")
-                    } else {
-                        binding.rvGallery.visibility = View.VISIBLE
-                        adapter.submitList(ordered)
+                    withContext(Dispatchers.Main) {
+                        val b = _binding ?: run {
+                            onComplete?.invoke()
+                            return@withContext
+                        }
+
+                        if (ordered.isEmpty()) {
+                            b.rvGallery.visibility = View.GONE
+                            showThrottledToast("No gallery images found")
+                        } else {
+                            b.rvGallery.visibility = View.VISIBLE
+                            adapter.submitList(ordered)
+                        }
+                        onComplete?.invoke()
                     }
-                    onComplete?.invoke()
                 }
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Fallback query failed", e)
-                Toast.makeText(requireContext(), "Failed loading gallery: ${e?.localizedMessage}", Toast.LENGTH_LONG).show()
-                onComplete?.invoke()
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                    if (_binding != null && isAdded) {
+                        Toast.makeText(requireContext(), "Failed loading gallery: ${e?.localizedMessage}", Toast.LENGTH_LONG).show()
+                    }
+                    onComplete?.invoke()
+                }
             }
     }
+
+
 
     /** Convert Firestore docs into a flat list of GalleryItem (Header + Image entries) */
     private fun buildGalleryItemsFromDocs(docs: List<com.google.firebase.firestore.DocumentSnapshot>): MutableList<GalleryItem> {
@@ -365,6 +407,17 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // cancel any pending fetch; prevents coroutine from reaching UI update
+        fetchJob?.cancel()
+        fetchJob = null
+
+        // avoid leaking adapter or views
+        try {
+            binding.rvGallery.adapter = null
+        } catch (ignored: Exception) {}
+
         _binding = null
     }
+
+
 }

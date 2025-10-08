@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.res.Resources
 import android.net.Uri
 import android.os.Bundle
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -50,6 +51,9 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     private var _binding: FragmentEditUserBinding? = null
     private val binding get() = _binding!!
 
+    private var updateJob: Job? = null
+    private var uploadJob: Job? = null
+
     private val db by lazy { Firebase.firestore }
 
     // Image state
@@ -82,6 +86,19 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     private var lastImeHeight = 0
     private var lastNavHeight = 0
     private var currentFocusedView: View? = null
+
+    // helper to run UI code only if view is active
+    private inline fun runIfBound(crossinline action: (FragmentEditUserBinding) -> Unit) {
+        val b = _binding ?: return
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            action(b)
+        } else {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                val b2 = _binding ?: return@launch
+                action(b2)
+            }
+        }
+    }
 
     // Launcher (keeps same behavior)
     private val pickImagesLauncher =
@@ -328,6 +345,11 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
         remoteConfig.fetchAndActivate()
             .addOnCompleteListener { task ->
+
+                // if view gone, skip
+                if (_binding == null) return@addOnCompleteListener
+
+
                 if (task.isSuccessful) {
                     uploadUrl = remoteConfig.getString("uploadImage_url")
                     deleteUrl = remoteConfig.getString("deleteImage_url")
@@ -337,9 +359,9 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     afrikaansUrl = remoteConfig.getString("translate_afrikaans_url")
                     apiKeyForTranslate = remoteConfig.getString("translate_api_key")
 
-                    Toast.makeText(requireContext(), "Remote config loaded", Toast.LENGTH_SHORT).show()
+                    runIfBound { b -> Toast.makeText(b.root.context, "Remote config loaded", Toast.LENGTH_SHORT).show() }
                 } else {
-                    Toast.makeText(requireContext(), "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show()
+                    runIfBound { b -> Toast.makeText(b.root.context, "Failed to fetch Remote Config", Toast.LENGTH_SHORT).show() }
                 }
             }
     }
@@ -348,7 +370,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         db.collection("users").document(docId).get()
             .addOnSuccessListener { snapshot ->
                 if (!snapshot.exists()) {
-                    Toast.makeText(requireContext(), "Document not found", Toast.LENGTH_LONG).show()
+                    runIfBound { b -> Toast.makeText(b.root.context, "Document not found", Toast.LENGTH_LONG).show() }
                     return@addOnSuccessListener
                 }
 
@@ -376,52 +398,50 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     }
                 }
 
-                isInitializing = true
+                // Now update UI on Main but guard that binding still exists
+                runIfBound { b ->
+                    isInitializing = true
 
-                // populate UI
-                binding.etEditTitle.setText(title)
-                // set spinner selection (match by exact string)
-                val adapter = binding.spinnerEditEventType.adapter
-                if (adapter != null) {
-                    for (i in 0 until adapter.count) {
-                        if (adapter.getItem(i)?.toString() == eventType) {
-                            binding.spinnerEditEventType.setSelection(i)
-                            break
+                    b.etEditTitle.setText(title)
+                    // set spinner selection (match by exact string)
+                    val adapter = b.spinnerEditEventType.adapter
+                    if (adapter != null) {
+                        for (i in 0 until adapter.count) {
+                            if (adapter.getItem(i)?.toString() == eventType) {
+                                b.spinnerEditEventType.setSelection(i)
+                                break
+                            }
                         }
                     }
+
+                    val primary = descriptions?.get("primary")?.toString() ?: ""
+                    val secondary = descriptions?.get("secondary")?.toString() ?: ""
+                    val tertiary = descriptions?.get("tertiary")?.toString() ?: ""
+
+                    b.etEditDescriptionPrimary.setText(primary)
+                    b.etEditDescriptionSecondary.setText(secondary)
+                    b.etEditDescriptionTertiary.setText(tertiary)
+
+                    originalPrimaryText = primary
+
+                    b.tvEditDate.text = if (date.isNotBlank()) date else "Select date"
+                    b.tvEditTime.text = if (time.isNotBlank()) time else "Select time"
+                    b.etEditDuration.setText(duration)
+                    b.etEditLocation.setText(location)
+                    b.switchEditIsComplete.isChecked = isComplete
+
+                    b.cbEditIncludeMap.isChecked = includeMapLink
+                    if (includeMapLink) {
+                        b.layoutEditMapLinkRow.visibility = View.VISIBLE
+                        b.etEditMapLink.setText(mapLink)
+                    } else {
+                        b.layoutEditMapLinkRow.visibility = View.GONE
+                        b.etEditMapLink.text?.clear()
+                    }
+
+                    isInitializing = false
+                    renderImages() // safe because runIfBound ensures we are on Main with binding
                 }
-                val primary = descriptions?.get("primary")?.toString() ?: ""
-                val secondary = descriptions?.get("secondary")?.toString() ?: ""
-                val tertiary = descriptions?.get("tertiary")?.toString() ?: ""
-
-                binding.etEditDescriptionPrimary.setText(primary)
-                binding.etEditDescriptionSecondary.setText(secondary)
-                binding.etEditDescriptionTertiary.setText(tertiary)
-
-                originalPrimaryText = primary
-
-
-                binding.tvEditDate.text = if (date.isNotBlank()) date else "Select date"
-                binding.tvEditTime.text = if (time.isNotBlank()) time else "Select time"
-                binding.etEditDuration.setText(duration)
-                binding.etEditLocation.setText(location)
-                binding.switchEditIsComplete.isChecked = isComplete
-
-                // NEW: map fields
-                binding.cbEditIncludeMap.isChecked = includeMapLink
-                if (includeMapLink) {
-                    binding.layoutEditMapLinkRow.visibility = View.VISIBLE
-                    binding.etEditMapLink.setText(mapLink)
-                } else {
-                    binding.layoutEditMapLinkRow.visibility = View.GONE
-                    binding.etEditMapLink.text?.clear()
-                }
-
-                isInitializing = false
-                renderImages()
-            }
-            .addOnFailureListener { ex ->
-                Toast.makeText(requireContext(), "Failed to load: ${ex.message}", Toast.LENGTH_LONG).show()
             }
     }
 
@@ -497,11 +517,15 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
     }
 
     private fun renderImages() {
+
+        val b = _binding ?: return
+
+
         val ll = binding.llEditImages
         ll.removeAllViews()
         progressMap.clear()
 
-        val inflater = LayoutInflater.from(requireContext())
+        val inflater = LayoutInflater.from(b.root.context)
         val sizePx = dpToPx(160)
         val marginPx = dpToPx(6)
 
@@ -520,7 +544,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
             val removeBtn = frame.findViewById<ImageButton>(R.id.item_remove)
             val progress = frame.findViewById<ProgressBar>(R.id.item_progress)
 
-            Glide.with(this).load(img["url"]).into(iv)
+            Glide.with(b.root).load(img["url"]).into(iv)
 
             removeBtn.setOnClickListener {
                 val publicId = img["public_id"] ?: return@setOnClickListener
@@ -586,56 +610,56 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
     private suspend fun uploadNewImages(uris: List<Uri>): List<Map<String, String>> {
         if (uris.isEmpty()) return emptyList()
-        val url = uploadUrl ?: throw Exception("Upload URL not available")
+        val url = uploadUrl ?: throw CancellationException("Upload URL not available")
         val apiKey = imageCloudApiKey ?: ""
 
-        // Use uri string as the stable key so it matches renderImages() keys
         val pairs = uris.map { uri -> "new:${uri.toString()}" to uri }
 
+        // Ensure we have a valid context now; otherwise cancel
+        val ctx = context ?: throw CancellationException("Context gone")
+
         return try {
-            ImageUploadService.uploadUris(requireContext(), pairs, url, apiKey) { key, visible ->
-                // callback invoked on upload start/stop for a particular key
-                lifecycleScope.launchWhenStarted {
-                    val progress = progressMap[key]
-                    if (progress != null) {
-                        progress.visibility = if (visible) View.VISIBLE else View.GONE
+            // run the upload in a cancellable way; the service will call our callback for progress
+            val result = withContext(Dispatchers.IO) {
+                ImageUploadService.uploadUris(ctx, pairs, url, apiKey) { key, visible ->
+                    // UI updates must run on the view lifecycle scope and only if view exists
+                    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
+                        if (_binding == null) return@launch
+                        val progress = progressMap[key]
+                        if (progress != null) {
+                            progress.visibility = if (visible) View.VISIBLE else View.GONE
+                        }
 
                         if (visible) {
-                            // progress.parent should be the FrameLayout inflated for that item
-                            val itemView = progress.parent as? View ?: return@launchWhenStarted
-
-
-                            //Adding to see if it focuses on uploading images after hitting save button
-// request focus on the item (so keyboard focus stays away from inputs)
-                            itemView.isFocusable = true
-                            itemView.isFocusableInTouchMode = true
-                            itemView.requestFocus()
-
-
-
-                            // post to ensure measured/laid-out values are available
-                            binding.hsvEditImages.post {
-                                // center the item in the HSV (so it's clearly visible)
-                                val itemLeft = itemView.left
-                                val itemWidth = itemView.width
-                                val hsvWidth = binding.hsvEditImages.width
-                                val targetX = (itemLeft + itemWidth / 2 - hsvWidth / 2).coerceAtLeast(0)
-                                binding.hsvEditImages.smoothScrollTo(targetX, 0)
+                            // scroll the HSV to center this item — guard binding again
+                            val itemView = progress?.parent as? View
+                            if (itemView != null && _binding != null) {
+                                binding.hsvEditImages.post {
+                                    if (_binding == null) return@post
+                                    val itemLeft = itemView.left
+                                    val itemWidth = itemView.width
+                                    val hsvWidth = binding.hsvEditImages.width
+                                    val targetX = (itemLeft + itemWidth / 2 - hsvWidth / 2).coerceAtLeast(0)
+                                    binding.hsvEditImages.smoothScrollTo(targetX, 0)
+                                }
                             }
                         }
                     }
                 }
             }
+            result
+        } catch (e: CancellationException) {
+            // bubble cancellation up
+            throw e
         } catch (e: Exception) {
-            // Ensure all progress bars for these new URIs are hidden on failure
+            // Hide progress bars for these keys on main
             withContext(Dispatchers.Main) {
-                pairs.forEach { (key, _) ->
-                    progressMap[key]?.visibility = View.GONE
-                }
+                pairs.forEach { (key, _) -> progressMap[key]?.visibility = View.GONE }
             }
             throw e
         }
     }
+
 
 
 
@@ -699,8 +723,27 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         val descSecondary = binding.etEditDescriptionSecondary.text?.toString()?.trim() ?: ""
         val descTertiary = binding.etEditDescriptionTertiary.text?.toString()?.trim() ?: ""
 
-        if (descPrimary.isEmpty() || descSecondary.isEmpty() || descTertiary.isEmpty()) {
-            Toast.makeText(requireContext(), "Please fill in all 3 descriptions", Toast.LENGTH_SHORT).show()
+        // simple string-based validation for translations (same logic as the create flow)
+        val invalidTranslationValues = setOf("", "Translating...", "Translation timed out")
+
+        if (descPrimary.isEmpty()) {
+            Toast.makeText(requireContext(), "Enter the primary description", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (descSecondary in invalidTranslationValues) {
+            Toast.makeText(
+                requireContext(),
+                "isiZulu translation not ready or invalid.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        if (descTertiary in invalidTranslationValues) {
+            Toast.makeText(
+                requireContext(),
+                "Afrikaans translation not ready or invalid.",
+                Toast.LENGTH_LONG
+            ).show()
             return
         }
 
@@ -736,27 +779,12 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
         val isComplete = binding.switchEditIsComplete.isChecked
 
-        //uploading images is optional
-//        val totalImagesCount = existingImages.size + newImageUris.size
-//        if (totalImagesCount <= 0) {
-//            Toast.makeText(requireContext(), "At least one image is required", Toast.LENGTH_SHORT).show()
-//            return
-//        }
-
 
         // disable UI while processing (do this immediately so user cannot change content)
         binding.btnPickMoreImages.isEnabled = false
         binding.btnUpdate.isEnabled = false
         binding.etBtnCancel.isEnabled = false
 
-
-//        // Clear focus to avoid focus change scrolling to an image view
-//        binding.root.requestFocus()
-//        val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-//        imm?.hideSoftInputFromWindow(binding.root.windowToken, 0)
-
-        //Adding to see if it focuses on uploading images after hitting save button
-        //Above commented code was to test this
         // --- Make image area take focus so it stays visible while uploading ---
         binding.hsvEditImages.isFocusable = true
         binding.hsvEditImages.isFocusableInTouchMode = true
@@ -786,12 +814,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
         }
 
 
+        // before starting, cancel previous
+        updateJob?.cancel()
 
-
-
-        // DO NOT show the big pbUpdate yet — let per-image progress be visible during uploads.
-
-        lifecycleScope.launchWhenStarted {
+        updateJob = viewLifecycleOwner.lifecycleScope.launch {
             var updateSucceeded = false
 
             try {
@@ -803,6 +829,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
                 // 2) Now that images are uploaded, show global "finalizing" progress (overlay)
                 withContext(Dispatchers.Main) {
+                    val b = _binding ?: run {
+                        // view gone: cancel flow
+                        throw CancellationException("View destroyed")
+                    }
                     binding.pbUpdate.visibility = View.VISIBLE
                     // optionally bring to front to ensure overlay
                     binding.pbUpdate.bringToFront()
@@ -842,6 +872,8 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                 val docId = docIdArg
                 if (docId.isNullOrBlank()) throw Exception("No document id to update")
 
+
+
                 // IMPORTANT: await the update task so we keep pbUpdate visible until Firestore finishes
                 db.collection("users").document(docId).update(updateMap).await()
 
@@ -852,6 +884,7 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
                 // success path (update UI on main)
                 withContext(Dispatchers.Main) {
+                    if (_binding == null) return@withContext
                     Toast.makeText(requireContext(), "Updated", Toast.LENGTH_SHORT).show()
 
                     newImageUris.clear()
@@ -860,21 +893,26 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
                     renderImages()
                     originalPrimaryText = descriptions["primary"] ?: ""
 
-                    parentFragmentManager.popBackStack()
-                }
+                    // pop only if still attached
+                    if (isAdded) parentFragmentManager.popBackStack()                }
 
+            }
+            catch (e: CancellationException) {
+                // cancelled (view destroyed) — ignore
             } catch (e: Exception) {
                 // show error (main thread)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    if (_binding != null) Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             } finally {
                 // always re-enable UI and hide the big progress
                 withContext(Dispatchers.Main) {
-                    binding.btnPickMoreImages.isEnabled = true
-                    binding.btnUpdate.isEnabled = true
-                    binding.pbUpdate.visibility = View.GONE
-                    binding.etBtnCancel.isEnabled = true
+                    if (_binding != null) {
+                        binding.btnPickMoreImages.isEnabled = true
+                        binding.btnUpdate.isEnabled = true
+                        binding.pbUpdate.visibility = View.GONE
+                        binding.etBtnCancel.isEnabled = true
+                    }
 
                 }
 
@@ -906,9 +944,10 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
                 if (currentText.trim() == originalPrimaryText.trim()) return
 
-                translationJob = lifecycleScope.launch {
+                translationJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
                         delay(3000)
+                        if (_binding == null) return@launch
 
                         val zUrl = zuluUrl
                         val aUrl = afrikaansUrl
@@ -916,58 +955,91 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
                         if (zUrl.isNullOrBlank() || aUrl.isNullOrBlank()) return@launch
                         if (apiKey.isNullOrBlank()) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(requireContext(), "Translate API key missing (check Remote Config)", Toast.LENGTH_SHORT).show()
+                            runIfBound { b ->
+                                Toast.makeText(
+                                    b.root.context,
+                                    "Translate API key missing (check Remote Config)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                             return@launch
                         }
 
                         withContext(Dispatchers.Main) {
-                            binding.pbEditSecondaryTranslate.visibility = View.VISIBLE
-                            binding.pbEditTertiaryTranslate.visibility = View.VISIBLE
-                            binding.etEditDescriptionSecondary.setText("Translating...")
-                            binding.etEditDescriptionTertiary.setText("Translating...")
+                            val b = _binding ?: return@withContext
+                            b.pbEditSecondaryTranslate.visibility = View.VISIBLE
+                            b.pbEditTertiaryTranslate.visibility = View.VISIBLE
+                            b.etEditDescriptionSecondary.setText("Translating...")
+                            b.etEditDescriptionTertiary.setText("Translating...")
                         }
 
                         val zuluDeferred = async(Dispatchers.IO) {
                             withTimeoutOrNull(10_000) {
-                                TranslationHelper.translateText(currentText, zUrl, apiKey)
+                                TranslationHelper.translateText(
+                                    currentText,
+                                    zUrl,
+                                    apiKey
+                                )
                             }
                         }
                         val afrDeferred = async(Dispatchers.IO) {
                             withTimeoutOrNull(10_000) {
-                                TranslationHelper.translateText(currentText, aUrl, apiKey)
+                                TranslationHelper.translateText(
+                                    currentText,
+                                    aUrl,
+                                    apiKey
+                                )
                             }
                         }
 
-                        val zuluResult = try { zuluDeferred.await() } catch (_: Exception) { null }
-                        val afrResult = try { afrDeferred.await() } catch (_: Exception) { null }
+                        val zuluResult = try {
+                            zuluDeferred.await()
+                        } catch (_: Exception) {
+                            null
+                        }
+                        val afrResult = try {
+                            afrDeferred.await()
+                        } catch (_: Exception) {
+                            null
+                        }
 
                         withContext(Dispatchers.Main) {
-                            binding.etEditDescriptionSecondary.setText(zuluResult ?: "Translation timed out")
-                            binding.etEditDescriptionTertiary.setText(afrResult ?: "Translation timed out")
+                            val b = _binding ?: return@withContext
+                            b.etEditDescriptionSecondary.setText(
+                                zuluResult ?: "Translation timed out"
+                            )
+                            b.etEditDescriptionTertiary.setText(
+                                afrResult ?: "Translation timed out"
+                            )
                         }
                     } catch (ex: CancellationException) {
+                        // cancelled - cleanup progress UI
                         withContext(Dispatchers.Main) {
-                            binding.pbEditSecondaryTranslate.visibility = View.GONE
-                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            if (_binding != null) {
+                                binding.pbEditSecondaryTranslate.visibility = View.GONE
+                                binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            }
                         }
-                        throw ex
                     } catch (ex: Exception) {
                         withContext(Dispatchers.Main) {
-                            binding.pbEditSecondaryTranslate.visibility = View.GONE
-                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            if (_binding != null) {
+                                binding.pbEditSecondaryTranslate.visibility = View.GONE
+                                binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            }
                         }
                     } finally {
                         withContext(Dispatchers.Main) {
-                            binding.pbEditSecondaryTranslate.visibility = View.GONE
-                            binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            if (_binding != null) {
+                                binding.pbEditSecondaryTranslate.visibility = View.GONE
+                                binding.pbEditTertiaryTranslate.visibility = View.GONE
+                            }
                         }
                     }
+
                 }
             }
 
-            override fun afterTextChanged(s: Editable?) {}
+                override fun afterTextChanged(s: Editable?) {}
         })
     }
 
@@ -1013,7 +1085,20 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        // cancel any background jobs tied to the view lifecycle
         translationJob?.cancel()
+        updateJob?.cancel()
+        uploadJob?.cancel()
+
+        // clear progress map to avoid holding view refs
+        progressMap.clear()
+
+        // clear image lists to reduce retained memory
+        newImageUris.clear()
+        // existingImages may be preserved if you need it across Fragment recreation, but clearing avoids leaks:
+        // existingImages.clear()
+
         _binding = null
     }
+
 }

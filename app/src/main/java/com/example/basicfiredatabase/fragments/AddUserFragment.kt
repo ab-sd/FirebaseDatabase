@@ -2,11 +2,13 @@ package com.example.basicfiredatabase.fragments
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.ContentValues.TAG
 
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 
 import android.view.View
 import android.view.ViewGroup
@@ -43,8 +45,12 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
+
     private var _binding: FragmentAddUserBinding? = null
     private val binding get() = _binding!!
+
+    private fun isViewActive(): Boolean = _binding != null && isAdded && view != null
+
 
     private lateinit var imageAdapter: ImageListAdapter
     private val db by lazy { Firebase.firestore }
@@ -264,9 +270,6 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 // Option A: force a full refresh (safe for <=15 items)
                 imageAdapter.notifyDataSetChanged()
 
-                // Optionally: ensure decorations/layout updated
-                binding.recyclerSelectedImages.invalidateItemDecorations()
-                binding.recyclerSelectedImages.requestLayout()
             }
         }
         binding.tvImagesCount.text = "${selectedImageUris.size} / $MAX_IMAGES images selected"
@@ -295,20 +298,26 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                     return
                 }
 
-                translationJob = lifecycleScope.launch {
+                translationJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
                         delay(3000) // debounce
+                        if (!isViewActive()) return@launch
+
+
                         val currentZuluUrl = zuluUrl
                         val currentAfrUrl = afrikaansUrl
                         val currentApiKey = apiKeyForTranslate
+
                         if (currentZuluUrl.isNullOrBlank() || currentAfrUrl.isNullOrBlank()) return@launch
                         if (currentApiKey.isNullOrBlank()) {
-                            withContext(Dispatchers.Main) {
+                            if (isViewActive())
                                 Toast.makeText(requireContext(), "Translate API key missing", Toast.LENGTH_SHORT).show()
-                            }
                             return@launch
                         }
                         withContext(Dispatchers.Main) {
+
+                            if (!isViewActive()) return@withContext
+
                             pbSecondary.visibility = View.VISIBLE
                             pbTertiary.visibility = View.VISIBLE
                             etSecondary.setText("Translating...")
@@ -340,9 +349,13 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                             null
                         }
 
+
                         withContext(Dispatchers.Main) {
+                            if (!isViewActive()) return@withContext
                             etSecondary.setText(zuluResult ?: "Translation timed out")
                             etTertiary.setText(afrResult ?: "Translation timed out")
+                            pbSecondary.visibility = View.GONE
+                            pbTertiary.visibility = View.GONE
                         }
                     } catch (ex: CancellationException) {
                         withContext(Dispatchers.Main) {
@@ -383,6 +396,10 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
         remoteConfig.fetchAndActivate()
             .addOnCompleteListener { task ->
+
+                if (!isViewActive()) return@addOnCompleteListener
+
+
                 if (task.isSuccessful) {
                     imageUploadUrl = remoteConfig.getString("uploadImage_url")
                     imageCloudApiKey = remoteConfig.getString("cloud_api_key")
@@ -477,10 +494,30 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
             // map link data
             val (includeMapLink, mapLink) = getMapLinkData()
 
-            if (title.isEmpty() || descPrimaryTxt.isEmpty() || descSecondaryTxt.isEmpty() || descTertiaryTxt.isEmpty() || location.isEmpty()) {
-                Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+
+            when {
+                title.isEmpty() -> {
+                    Toast.makeText(requireContext(), "Enter event title", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                descPrimaryTxt.isEmpty() -> {
+                    Toast.makeText(requireContext(), "Enter the primary description", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                descSecondaryTxt.isEmpty() -> {
+                    Toast.makeText(requireContext(), "Secondary description is empty — wait for translation or enter it manually", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                descTertiaryTxt.isEmpty() -> {
+                    Toast.makeText(requireContext(), "Tertiary description is empty — wait for translation or enter it manually", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                location.isEmpty() -> {
+                    Toast.makeText(requireContext(), "Enter event location", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
             }
+
             if (date.isEmpty() || date == "Select date") {
                 Toast.makeText(requireContext(), "Select event date", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -494,10 +531,30 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 return@setOnClickListener
             }
 
+            val invalidTranslationValues = setOf("", "Translating...", "Translation timed out")
+
+            if (descSecondaryTxt in invalidTranslationValues) {
+                Toast.makeText(
+                    requireContext(),
+                    "Zulu translation not ready or invalid.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+
+            if (descTertiaryTxt in invalidTranslationValues) {
+                Toast.makeText(
+                    requireContext(),
+                    "Afrikaans translation not ready or invalid.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@setOnClickListener
+            }
+
 
 
             if (includeMapLink && mapLink.isNullOrEmpty()) {
-                Toast.makeText(requireContext(), "Please paste the Google Maps link or uncheck \"Include Google Maps link\"", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "Please paste the Google Maps link or uncheck box", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
@@ -581,14 +638,18 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         } catch (e: Exception) {
             // Show a toast to let the user know
             withContext(Dispatchers.Main) {
-                Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+                if (isViewActive()) {
+                    Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
             emptyList()
         } finally {
             // always clear spinners if anything went wrong
             withContext(Dispatchers.Main) {
+                if (!isViewActive()) return@withContext
                 selectedImageUris.indices.forEach { onProgress(it, false) }
             }
+
         }
     }
 
@@ -631,6 +692,10 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
         db.collection("users")
             .add(event)
             .addOnSuccessListener { docRef ->
+
+                if (!isViewActive()) return@addOnSuccessListener
+
+
                 Toast.makeText(requireContext(), "Saved (id=${docRef.id})", Toast.LENGTH_SHORT).show()
 
                 // reset UI
@@ -657,6 +722,10 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
                 parentFragmentManager.popBackStack()
             }
             .addOnFailureListener { e ->
+
+                if (!isViewActive()) return@addOnFailureListener
+
+
                 Toast.makeText(requireContext(), "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
                 binding.pbSave.visibility = View.GONE
             }
@@ -718,12 +787,21 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
 
     override fun onDestroyView() {
+        Log.d(TAG, "onDestroyView() — canceling jobs and clearing binding")
+
         super.onDestroyView()
-        binding.recyclerSelectedImages.adapter = null
-        _binding = null
+        // Cancel ongoing translation
         translationJob?.cancel()
+
+        // Cancel any Firebase task listeners if needed (optional)
+        // Remote config + upload will auto-cancel when lifecycle destroyed
+
+        // Clear adapter and data
+        binding.recyclerSelectedImages.adapter = null
         selectedImageUris.clear()
         imageAdapter.submitList(emptyList())
+
+        _binding = null
     }
 
     companion object {
