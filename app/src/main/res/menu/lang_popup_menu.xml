@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/menu/lang_popup_menu.xml -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/lang_en"
+        android:title="@string/lang_english" />
+    <item
+        android:id="@+id/lang_af"
+        android:title="@string/lang_afrikaans" />
+    <item
+        android:id="@+id/lang_zu"
+        android:title="@string/lang_zulu" />
+</menu>

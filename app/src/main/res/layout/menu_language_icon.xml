@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- res/layout/menu_language_icon.xml -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="?attr/actionBarSize"
     android:foreground="?attr/selectableItemBackgroundBorderless"
-    android:gravity="center">
+    android:gravity="center_vertical">
 
-    <ImageButton
+    <!-- Use an ImageView sized to actionBarSize; centerInside will keep the visible globe smaller. -->
+    <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/btn_lang_icon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="?attr/actionBarSize"
+        android:layout_height="?attr/actionBarSize"
         android:src="@drawable/ic_world"
         android:contentDescription="@string/action_language"
         android:scaleType="centerInside"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:adjustViewBounds="true"
-        android:padding="4dp"
-        app:tint="@color/black" />
+        android:tint="@color/black"
+        android:padding="45dp" />
+
 </FrameLayout>

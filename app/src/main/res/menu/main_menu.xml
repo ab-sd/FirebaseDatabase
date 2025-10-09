@@ -6,18 +6,8 @@
     <item
         android:id="@+id/action_language"
         android:title="@string/action_language"
-        app:showAsAction="never">
-        <menu>
-            <item
-                android:id="@+id/action_lang_en"
-                android:title="@string/lang_english" />
-            <item
-                android:id="@+id/action_lang_af"
-                android:title="@string/lang_afrikaans" />
-            <item
-                android:id="@+id/action_lang_zu"
-                android:title="@string/lang_zulu" />
-        </menu>
-    </item>
+        app:showAsAction="always"
+        app:actionLayout="@layout/menu_language_icon"
+        android:orderInCategory="100"/>
 
 </menu>

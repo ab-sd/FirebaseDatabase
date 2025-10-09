@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.appcompat.app.ActionBarDrawerToggle
@@ -112,6 +113,10 @@ class MainActivity : AppCompatActivity() {
         // Drawer + toolbar setup
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+        // make action view align with nav icon
+        toolbar.contentInsetEndWithActions = 0
+        toolbar.contentInsetStartWithNavigation = 0
+        toolbar.setContentInsetsRelative(0, 0)
 
         val navView = findViewById<NavigationView>(R.id.nav_view)
 
@@ -154,42 +159,65 @@ class MainActivity : AppCompatActivity() {
     // Inflate the top-right overflow menu (res/menu/main_menu.xml)
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
+
+        // Ensure toolbar insets are minimized so icon lines up with nav icon
+        val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+        toolbar.contentInsetEndWithActions = 0
+        toolbar.contentInsetStartWithNavigation = 0
+        toolbar.setContentInsetsRelative(0, 0)
+
+        // Find the action view's button and wire up popup
+        val langItem = menu?.findItem(R.id.action_language)
+        val actionView = langItem?.actionView
+        val iconBtn = actionView?.findViewById<View>(R.id.btn_lang_icon)
+
+        iconBtn?.setOnClickListener { anchor ->
+            val popup = androidx.appcompat.widget.PopupMenu(this, anchor)
+            popup.menuInflater.inflate(R.menu.lang_popup_menu, popup.menu)
+
+            // Make the menu single-choice-looking (optional)
+            popup.menu.setGroupCheckable(0, true, true)
+            when (LanguagePrefs.current()) {
+                "en" -> popup.menu.findItem(R.id.lang_en)?.isChecked = true
+                "af" -> popup.menu.findItem(R.id.lang_af)?.isChecked = true
+                "zu" -> popup.menu.findItem(R.id.lang_zu)?.isChecked = true
+            }
+
+            popup.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    R.id.lang_en -> { changeLanguage("en"); true }
+                    R.id.lang_af -> { changeLanguage("af"); true }
+                    R.id.lang_zu -> { changeLanguage("zu"); true }
+                    else -> false
+                }
+            }
+
+            popup.show()
+        }
+
         return true
     }
 
 
-    // Handle drawer toggle and language menu items
+
+    // Handle drawer toggle + Up button (language choices handled by the popup on the action view)
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // let the drawer toggle handle the hamburger first
+        // Let the drawer toggle (hamburger) handle nav first
         if (drawerToggle.onOptionsItemSelected(item)) return true
 
-        // handle the action bar back (up) button for fragments that enabled it
+        // Treat the action bar Up (home) button as a "pop fragment" action
         if (item.itemId == android.R.id.home) {
-            // If the drawer is open, let drawer toggle handle it; otherwise pop
-            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                if (supportFragmentManager.backStackEntryCount > 0) {
-                    supportFragmentManager.popBackStack()
-                    return true
-                }
+            // If drawer is not open and we have back stack entries, pop one
+            if (!drawerLayout.isDrawerOpen(GravityCompat.START) &&
+                supportFragmentManager.backStackEntryCount > 0) {
+                supportFragmentManager.popBackStack()
+                return true
             }
         }
 
-        return when (item.itemId) {
-            R.id.action_lang_en -> {
-                changeLanguage("en")
-                true
-            }
-            R.id.action_lang_af -> {
-                changeLanguage("af")
-                true
-            }
-            R.id.action_lang_zu -> {
-                changeLanguage("zu")
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
+        return super.onOptionsItemSelected(item)
     }
+
 
     private fun changeLanguage(langCode: String) {
         // Determine the current fragment hosted in R.id.fragment_container
