@@ -17,6 +17,7 @@ import com.example.basicfiredatabase.adapters.GalleryAdapter
 import com.example.basicfiredatabase.models.GalleryItem
 import com.example.basicfiredatabase.databinding.FragmentGalleryBinding
 import com.example.basicfiredatabase.utils.NetworkUtils.isNetworkAvailable
+import com.example.basicfiredatabase.utils.SimpleGroupSpacingDecoration
 import com.google.firebase.firestore.Query
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
@@ -107,6 +108,18 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         binding.rvGallery.setHasFixedSize(true)
         binding.rvGallery.layoutManager = glm
         binding.rvGallery.adapter = adapter
+
+        // spacing in dp
+        val spacingDp = 30
+        val spacingPx = (spacingDp * resources.displayMetrics.density).toInt()
+        binding.rvGallery.addItemDecoration(
+            SimpleGroupSpacingDecoration(
+                adapter,
+                spacingPx,
+                headerViewType = 0
+            )
+        )
+
     }
 
 
@@ -120,7 +133,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
         binding.srlGallery.setOnRefreshListener {
             if (!isNetworkAvailable(requireContext())) {
                 binding.srlGallery.isRefreshing = false
-                showThrottledToast("No internet connection")
+                showThrottledToast(getString(R.string.no_internet_connection))
             } else {
                 // show spinner (user initiated) and load, stopping spinner in onComplete
                 binding.srlGallery.isRefreshing = true
@@ -162,7 +175,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
                             if (galleryItems.isEmpty()) {
                                 b.rvGallery.visibility = View.GONE
-                                showThrottledToast("No images available for this event")
+                                showThrottledToast(getString(R.string.no_images_available_for_this_event))
                                 adapter.submitList(emptyList())
                             } else {
                                 b.rvGallery.visibility = View.VISIBLE
@@ -178,7 +191,8 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                     // show toast safely using viewScope
                     viewScope.launch(Dispatchers.Main) {
                         if (_binding != null && isAdded) {
-                            Toast.makeText(requireContext(), "Failed loading images for event", Toast.LENGTH_LONG).show()
+                            Toast.makeText(requireContext(),
+                                getString(R.string.failed_loading_images_for_event), Toast.LENGTH_LONG).show()
                         }
                         onComplete?.invoke()
                     }
@@ -211,7 +225,7 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
 
                         if (galleryItems.isEmpty()) {
                             b.rvGallery.visibility = View.GONE
-                            showThrottledToast("No gallery images found")
+                            showThrottledToast(getString(R.string.no_gallery_images_found))
                         } else {
                             b.rvGallery.visibility = View.VISIBLE
                             adapter.submitList(galleryItems)
@@ -234,7 +248,8 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
                 // Inform user + stop spinner on main thread using viewScope
                 viewScope.launch(Dispatchers.Main) {
                     if (_binding != null && isAdded) {
-                        Toast.makeText(requireContext(), "Server query failed. Falling back to client-side fetch.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(requireContext(),
+                            getString(R.string.server_query_failed_fallback), Toast.LENGTH_LONG).show()
                     }
                     onComplete?.invoke()
                 }

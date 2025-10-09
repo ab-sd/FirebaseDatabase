@@ -211,7 +211,7 @@
                     android:id="@+id/tv_images_label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Images"
+                    android:text="@string/images_header"
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:gravity="center" />
@@ -245,12 +245,13 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
+
             <!-- VIEW IMAGES button (appears for completed events) -->
             <Button
                 android:id="@+id/btn_view_images"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="View images"
+                android:text="@string/view_all_past_images"
                 android:visibility="gone"
                 android:layout_marginTop="8dp"
                 android:padding="12dp"

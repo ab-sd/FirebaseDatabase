@@ -122,10 +122,10 @@ class UserAdapter(
 
                 if (user.images.isNullOrEmpty()) {
                     btnViewImages.apply {
-                        text = "No images available"
+                        text = context.getString(R.string.no_images_available)
                         isEnabled = false
                         isClickable = false
-                        setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_broken_image, 0, 0, 0)
+                        setCompoundDrawablesWithIntrinsicBounds(R.drawable.outline_broken_image_24, 0, 0, 0)
                         alpha = 0.6f
                         try {
                             backgroundTintList = ContextCompat.getColorStateList(ctx, android.R.color.darker_gray)
@@ -133,7 +133,7 @@ class UserAdapter(
                     }
                 } else {
                     btnViewImages.apply {
-                        text = "View images"
+                        text = context.getString(R.string.view_images)
                         isEnabled = true
                         isClickable = true
                         alpha = 1f

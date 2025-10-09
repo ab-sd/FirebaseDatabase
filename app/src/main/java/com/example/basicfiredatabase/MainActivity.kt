@@ -1,19 +1,13 @@
 package com.example.basicfiredatabase
 
 import android.content.Context
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.ActionBarDrawerToggle
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
@@ -133,10 +127,22 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+
     // Handle drawer toggle and language menu items
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         // let the drawer toggle handle the hamburger first
         if (drawerToggle.onOptionsItemSelected(item)) return true
+
+        // handle the action bar back (up) button for fragments that enabled it
+        if (item.itemId == android.R.id.home) {
+            // If the drawer is open, let drawer toggle handle it; otherwise pop
+            if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                if (supportFragmentManager.backStackEntryCount > 0) {
+                    supportFragmentManager.popBackStack()
+                    return true
+                }
+            }
+        }
 
         return when (item.itemId) {
             R.id.action_lang_en -> {
@@ -156,13 +162,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun changeLanguage(langCode: String) {
-        // persist new language and recreate activity so resources are reloaded
-        LanguagePrefs.setLanguage(applicationContext, langCode)
-
-        // show a small, immediate confirmation (not localized since recreation happens right after)
-        Toast.makeText(this, "Language: $langCode", Toast.LENGTH_SHORT).show()
-
-        // recreate the activity so UI strings (and drawer menu strings) re-inflate with new locale
-        recreate()
+        // Start the transition activity which will set the language and relaunch MainActivity
+        val i = Intent(this, TransitionAnimationActivity::class.java).putExtra(TransitionAnimationActivity.EXTRA_LANG, langCode)
+        startActivity(i)
+        // show immediate fade to the blank transition
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
     }
 }

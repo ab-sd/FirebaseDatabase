@@ -2,5 +2,6 @@
 <resources>
 
     <color name="event_box_color">#F9A825</color> <!-- Yellow -->
+    <color name="transition_anim">#000000</color>
 
 </resources>

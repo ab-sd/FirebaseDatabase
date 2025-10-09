@@ -149,18 +149,22 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
     }
 
     private fun setupHeader() {
-        val title = if (showUpcomingFilter) "View our current events" else "Below are our past events"
+        val title = if (showUpcomingFilter)
+            getString(R.string.header_upcoming_title)
+        else
+            getString(R.string.header_past_title)
+
         val desc = if (showUpcomingFilter) {
-            "Here are events scheduled soon. Tap a card to see details."
+            getString(R.string.header_upcoming_desc)
         } else {
-            "Tap 'View images' on an event to see images for that event, or open the full gallery below."
+            getString(R.string.header_past_desc)
         }
 
         headerAdapter.setData(HeaderData(
             title = title,
             description = desc,
             showCta = !showUpcomingFilter,
-            ctaText = "View all past images"
+            ctaText = getString(R.string.view_all_past_images)
         ))
     }
 

@@ -28,4 +28,23 @@
     <string name="action_gallery_label">All Past Images</string>
 
 
+    <string name="tab_upcoming_events">Komende Gebeure</string>
+    <string name="tab_past_events">Verlede Gebeure</string>
+    <string name="header_upcoming_title">Bekyk ons huidige gebeurtenisse</string>
+    <string name="header_upcoming_desc">Hier is gebeurtenisse wat binnekort plaasvind. Tik op \'n kaart om meer te sien.</string>
+    <string name="header_past_title">Hier is ons vorige gebeurtenisse</string>
+    <string name="header_past_desc">Tik \'Bekyk beelde\' om beelde van \'n gebeurtenis te sien of blaai deur die volle galery hieronder.</string>
+    <string name="view_all_past_images">Kyk na ons Galery van Verlede Gebeure</string>
+    <string name="images_header">Gebeurtenisbeelde Hieronder</string>
+    <string name="no_images_available">Geen beelde beskikbaar om te kyk nie</string>
+    <string name="view_images">Kyk na Gebeurtenisbeelde</string>
+    <string name="gallery_title">IC Norath Galery</string>
+    <string name="no_internet_connection">Geen internetverbinding nie</string>
+    <string name="no_images_available_for_this_event">Geen beelde beskikbaar vir hierdie gebeurtenis nie</string>
+    <string name="no_gallery_images_found">Geen galerybeelde gevind nie</string>
+    <string name="failed_loading_images_for_event">Kon nie beelde vir die gebeurtenis laai nie</string>
+    <string name="server_query_failed_fallback">Bedienernavrae het misluk. Val terug op kliënt-kant opvraging.</string>
+    <string name="return_only">Return</string>
+
+
 </resources>

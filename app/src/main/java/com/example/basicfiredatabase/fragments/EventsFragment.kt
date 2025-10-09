@@ -23,7 +23,11 @@ class EventsFragment : Fragment(R.layout.fragment_events) {
         }
 
         TabLayoutMediator(tabLayout, viewPager) { tab, pos ->
-            tab.text = if (pos == 0) "Upcoming Events" else "Past Events"
+            tab.text = if (pos == 0)
+                getString(R.string.tab_upcoming_events)
+            else
+                getString(R.string.tab_past_events)
+
         }.attach()
     }
 }

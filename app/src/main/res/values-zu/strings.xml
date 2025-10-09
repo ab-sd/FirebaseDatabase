@@ -28,4 +28,23 @@
     <string name="action_gallery_label">All Past Images</string>
 
 
+    <string name="tab_upcoming_events">Imicimbi Ezizayo</string>
+    <string name="tab_past_events">Imicimbi Edlule</string>
+    <string name="header_upcoming_title">Bheka imicimbi yethu yamanje</string>
+    <string name="header_upcoming_desc">Nanka imicimbi ezayo maduze. Thepha ikhadi ukuze ubone imininingwane.</string>
+    <string name="header_past_title">Nanka imicimbi yethu eyedlule</string>
+    <string name="header_past_desc">Thepha \'Buka izithombe\' ukuze ubone izithombe zomcimbi noma uvule igalari yonke ngezansi.</string>
+    <string name="view_all_past_images">Buka iGalari Yezigameko Zangaphambili</string>
+    <string name="images_header">Izithombe Zomcimbi Ezisezansi</string>
+    <string name="no_images_available">Azikho izithombe ezitholakalayo zokubuka</string>
+    <string name="view_images">Buka Izithombe Zomcimbi</string>
+    <string name="gallery_title">IC Norath isigcinimifanekiso </string>
+    <string name="no_internet_connection">Awekho uxhumano lwe-inthanethi</string>
+    <string name="no_images_available_for_this_event">Azikho izithombe ezitholakalayo zalo mcimbi</string>
+    <string name="no_gallery_images_found">Azitholakalanga izithombe zegalari</string>
+    <string name="failed_loading_images_for_event">Kwehlulekile ukulayisha izithombe zomcimbi</string>
+    <string name="server_query_failed_fallback">Ukubuza kuseva kwehlulekile. Kubuyela ekutholeni kwicala leklayenti.</string>
+    <string name="return_only">Return</string>
+
+
 </resources>
