@@ -30,6 +30,8 @@ import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.FirebaseApp
 
+
+//will test here with wrong firebase 64 string
 class MainActivity : AppCompatActivity() {
 
     private lateinit var drawerLayout: DrawerLayout
