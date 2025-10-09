@@ -6,10 +6,13 @@ import android.graphics.Paint
 import android.net.Uri
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -250,6 +253,7 @@ class UserAdapter(
             }
         }
 
+
         private fun bindImages(user: User) = with(binding) {
             // clear old image views
             llImages.removeAllViews()
@@ -287,6 +291,7 @@ class UserAdapter(
                 llImages.addView(iv)
             }
         }
+
 
         private fun bindActions(user: User, position: Int) = with(binding) {
             // Toggle expand/collapse when row is clicked.

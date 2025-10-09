@@ -27,6 +27,12 @@ import com.google.firebase.FirebaseApp
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        // forwarded to TransitionAnimationActivity (and then back to MainActivity)
+        const val EXTRA_FORWARD_FRAGMENT_CLASS = "extra_forward_fragment_class"
+        const val EXTRA_FORWARD_FRAGMENT_ARGS = "extra_forward_fragment_args"
+    }
+
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var drawerToggle: ActionBarDrawerToggle
     private val db by lazy { Firebase.firestore }
@@ -48,6 +54,30 @@ class MainActivity : AppCompatActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         setContentView(R.layout.activity_main)
+
+        // --- Restore forwarded fragment after language change (if any) ----------------
+        intent?.let { launchIntent ->
+            val fragClassName = launchIntent.getStringExtra(EXTRA_FORWARD_FRAGMENT_CLASS)
+            val fragArgs = launchIntent.getBundleExtra(EXTRA_FORWARD_FRAGMENT_ARGS)
+
+            if (!fragClassName.isNullOrBlank()) {
+                try {
+                    val clazz = Class.forName(fragClassName).asSubclass(androidx.fragment.app.Fragment::class.java)
+                    val newFrag = clazz.newInstance() // uses zero-arg constructor
+                    // Apply forwarded arguments if present
+                    if (fragArgs != null) newFrag.arguments = fragArgs
+
+                    // Replace the container with the restored fragment (do not add to back stack)
+                    supportFragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, newFrag)
+                        .commitAllowingStateLoss()
+                } catch (e: Exception) {
+                    // If anything fails (class not found, instantiation problem), silently fallback to default
+                    e.printStackTrace()
+                }
+            }
+        }
+
 
         drawerLayout = findViewById(R.id.drawer_layout)
         val appBarLayout = findViewById<com.google.android.material.appbar.AppBarLayout>(R.id.appBarLayout)
@@ -162,10 +192,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun changeLanguage(langCode: String) {
-        // Start the transition activity which will set the language and relaunch MainActivity
-        val i = Intent(this, TransitionAnimationActivity::class.java).putExtra(TransitionAnimationActivity.EXTRA_LANG, langCode)
-        startActivity(i)
-        // show immediate fade to the blank transition
+        // Determine the current fragment hosted in R.id.fragment_container
+        val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+
+        val forwardIntent = Intent(this, TransitionAnimationActivity::class.java).apply {
+            putExtra(TransitionAnimationActivity.EXTRA_LANG, langCode)
+
+            // If a fragment exists, pass its class name so the app can restore it after restart
+            currentFragment?.let { frag ->
+                // pass fragment's class name
+                putExtra(EXTRA_FORWARD_FRAGMENT_CLASS, frag::class.java.name)
+                // pass arguments bundle if any (Bundle is Parcelable)
+                frag.arguments?.let { putExtra(EXTRA_FORWARD_FRAGMENT_ARGS, it) }
+            }
+        }
+
+        startActivity(forwardIntent)
         overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
     }
+
 }
