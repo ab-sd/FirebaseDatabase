@@ -38,7 +38,7 @@ class UserAdapterTest {
 
     @Test
     fun `thumbnail shown when upcoming collapsed and has images`() {
-        val u = makeUser(isComplete = true, expanded = false, imagesCount = 2)
+        val u = makeUser(isComplete = false, expanded = false, imagesCount = 2)
         assertTrue(UserAdapter.shouldShowThumbnail(u))
     }
 
