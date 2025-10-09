@@ -44,7 +44,7 @@
     <string name="no_gallery_images_found">Azitholakalanga izithombe zegalari</string>
     <string name="failed_loading_images_for_event">Kwehlulekile ukulayisha izithombe zomcimbi</string>
     <string name="server_query_failed_fallback">Ukubuza kuseva kwehlulekile. Kubuyela ekutholeni kwicala leklayenti.</string>
-    <string name="return_only">Return</string>
+    <string name="return_only">Buyela ekhasini lezehlakalo</string>
 
 
 </resources>

@@ -44,7 +44,7 @@
     <string name="no_gallery_images_found">Geen galerybeelde gevind nie</string>
     <string name="failed_loading_images_for_event">Kon nie beelde vir die gebeurtenis laai nie</string>
     <string name="server_query_failed_fallback">Bedienernavrae het misluk. Val terug op kliënt-kant opvraging.</string>
-    <string name="return_only">Return</string>
+    <string name="return_only">Keer terug na Gebeurtenisse-bladsy</string>
 
 
 </resources>

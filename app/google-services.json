@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "59888357473",
+    "project_id": "fir-events-29d72",
+    "storage_bucket": "fir-events-29d72.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:59888357473:android:d09aa471f47b95dbc99a20",
+        "android_client_info": {
+          "package_name": "com.example.basicfiredatabase"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUS9G-Un1fd_rviYpOTX4PKaMGC5CjrRg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

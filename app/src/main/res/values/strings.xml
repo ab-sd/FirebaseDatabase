@@ -57,7 +57,7 @@
     <string name="no_gallery_images_found">No gallery images found</string>
     <string name="failed_loading_images_for_event">Failed loading images for event</string>
     <string name="server_query_failed_fallback">Server query failed. Falling back to client-side fetch.</string>
-    <string name="return_only">Return</string>
+    <string name="return_only">Return to Events Page</string>
 
 
 </resources>

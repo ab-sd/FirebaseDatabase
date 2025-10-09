@@ -70,6 +70,18 @@ class GalleryFragment : Fragment(R.layout.fragment_gallery) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+
+        // Return button: pop back stack when tapped
+        binding.btnReturn.setOnClickListener {
+            // pop the fragment stack (go back)
+            if (requireActivity().supportFragmentManager.backStackEntryCount > 0) {
+                requireActivity().supportFragmentManager.popBackStack()
+            } else {
+                // fallback: simply remove this fragment
+                parentFragmentManager.beginTransaction().remove(this@GalleryFragment).commitAllowingStateLoss()
+            }
+        }
+
         setupRecycler()
         setupSwipeRefresh()
 
