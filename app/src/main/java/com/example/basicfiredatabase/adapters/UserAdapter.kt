@@ -270,6 +270,7 @@ class UserAdapter(
                 iv.scaleType = ImageView.ScaleType.FIT_CENTER
                 iv.adjustViewBounds = true
 
+
                 Glide.with(ctx).load(img.url).into(iv)
 
                 iv.setOnClickListener {
