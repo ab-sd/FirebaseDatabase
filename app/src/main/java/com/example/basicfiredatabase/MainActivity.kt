@@ -8,6 +8,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
@@ -215,7 +216,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        return super.onOptionsItemSelected(item)
+        return when (item.itemId) {
+            R.id.theme_light -> {
+                // placeholder - demo behaviour
+                Toast.makeText(this, "Theme: Light (demo)", Toast.LENGTH_SHORT).show()
+                true
+            }
+            R.id.theme_dark -> {
+                // placeholder - demo behaviour
+                Toast.makeText(this, "Theme: Dark (demo)", Toast.LENGTH_SHORT).show()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
 

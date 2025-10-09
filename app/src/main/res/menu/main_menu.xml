@@ -10,4 +10,19 @@
         app:actionLayout="@layout/menu_language_icon"
         android:orderInCategory="100"/>
 
+    <!-- Default overflow submenu: "Select theme" -> Light / Dark -->
+    <item
+        android:id="@+id/action_select_theme"
+        android:title="Select Theme"
+        app:showAsAction="never" >
+        <menu>
+            <item
+                android:id="@+id/theme_light"
+                android:title="Light" />
+            <item
+                android:id="@+id/theme_dark"
+                android:title="Dark" />
+        </menu>
+    </item>
+
 </menu>
