@@ -13,7 +13,8 @@ data class HeaderData(
     val title: String,
     val description: String,
     val showCta: Boolean = false,
-    val ctaText: String = "View all past images"
+    val ctaText: String = "View all past images",
+    val imageRes: Int? = null
 )
 
 class HeaderAdapter(
@@ -40,6 +41,10 @@ class HeaderAdapter(
         holder.btnCta.text = data.ctaText
 
         holder.btnCta.setOnClickListener { onCtaClick?.invoke() }
+
+        holder.ivImage.setImageResource(R.drawable.image1_compressed)
+
+
 
         // For now we use the placeholder image defined in XML. If you later want a dynamic image:
         // Glide.with(holder.itemView).load(imageUrl).centerCrop().into(holder.ivImage)

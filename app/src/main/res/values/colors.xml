@@ -9,5 +9,7 @@
     <color name="unselected_tab_text">#888888</color> <!-- Dark gray -->
     <color name="transition_anim">#FFFFFFFF</color>
 
+<!--    Dividers-->
+    <color name="dividerColor">#494747</color>
 
 </resources>

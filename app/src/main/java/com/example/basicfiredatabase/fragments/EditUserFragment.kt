@@ -253,13 +253,14 @@ class EditUserFragment : Fragment(R.layout.fragment_edit_user) {
 
     private fun setupSpinner() {
         val types = listOf(
-            "Community Feeding Program",
-            "Back-to-School Drive",
+            "Food Drives and Community Kitchen",
+            "Fundraising Event",
             "Children’s Health and Wellness Fair",
-            "Sports and Recreation Day",
-            "Community Clean-Up and Beautification",
-            "Food and Hygiene Pack Distribution",
-            "Emergency Relief Fundraising Event"
+            "Educational Workshops",
+            "School Outreach Program",
+            "Awareness Campaigns/Seminars",
+            "Emergency Relief Distribution/Disaster Response",
+            "Sports and Recreation Day"
         )
 
         // Use your custom layouts for the closed view and dropdown items

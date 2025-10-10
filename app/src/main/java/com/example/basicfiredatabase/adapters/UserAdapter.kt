@@ -98,6 +98,38 @@ class UserAdapter(
             val descToShow = user.descriptions[descKey] ?: user.descriptions.values.firstOrNull().orEmpty()
             tvSummary.text = descToShow
 
+            // If collapsed -> show only a couple of lines with ellipsize; if expanded -> show full.
+            if (user.expanded) {
+                tvSummary.maxLines = Integer.MAX_VALUE
+                tvSummary.ellipsize = null
+            } else {
+                tvSummary.maxLines = 2 // same number as XML default; keep in sync
+                tvSummary.ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+
+            var ellipseExists = false
+
+            // detect overflow after layout
+            // 3️⃣ After layout, check if text was actually truncated
+            tvSummary.post {
+                // Only check if not expanded
+                if (!user.expanded) {
+                    val layout = tvSummary.layout
+                    if (layout != null) {
+                        for (i in 0 until layout.lineCount) {
+                            if (layout.getEllipsisCount(i) > 0) {
+                                ellipseExists = true
+                                break
+                            }
+                        }
+                    }
+                }
+
+                // 4️⃣ Use your boolean + expanded check for visibility
+                tvReadMore.visibility =
+                    if (ellipseExists && !user.expanded) View.VISIBLE else View.GONE
+            }
+
             val dateText = user.date.ifBlank { "No date set" }
             tvDate.text = dateText
         }

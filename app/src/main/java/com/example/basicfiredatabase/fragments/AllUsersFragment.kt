@@ -123,9 +123,6 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
         }
 
 
-        // Start realtime listener (keeps UI up-to-date)
-//        startUsersListener()
-
         // initial one-shot load (shows spinner on open); spinner will be stopped in onComplete
         val hasNetwork = isNetworkAvailable(requireContext())
         // disable swipe refresh if offline to prevent user from attempting to refresh while offline
@@ -164,7 +161,8 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             title = title,
             description = desc,
             showCta = !showUpcomingFilter,
-            ctaText = getString(R.string.view_all_past_images)
+            ctaText = getString(R.string.view_all_past_images),
+            imageRes = R.drawable.image1_compressed
         ))
     }
 
@@ -459,8 +457,25 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
                         .delete()
                         .addOnSuccessListener {
                             progressDialog.dismiss()
-                            Toast.makeText(requireContext(), "Deleted ${user.title}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                requireContext(),
+                                "Deleted ${user.title}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+
+                            if (isAdded) {
+                                if (isNetworkAvailable(requireContext())) {
+                                    fetchUsersOnce(onComplete = {
+                                        _binding?.srlUsers?.isRefreshing = false
+                                    })
+                                    eventsViewModel.triggerReload(fragmentId)
+                                } else {
+                                    showOfflineToastIfNeeded()
+                                }
+                            }
                         }
+
                         .addOnFailureListener { e ->
                             progressDialog.dismiss()
                             Log.w(TAG, "Error deleting", e)

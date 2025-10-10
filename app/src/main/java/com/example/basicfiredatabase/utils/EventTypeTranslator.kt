@@ -23,7 +23,17 @@ object EventTypeTranslator {
         normalize("Sports and Recreation Day") to R.string.type_sports_and_recreation_day,
         normalize("Community Clean-Up and Beautification") to R.string.type_community_clean_up_and_beautification,
         normalize("Food and Hygiene Pack Distribution") to R.string.type_food_and_hygiene_pack_distribution,
-        normalize("Emergency Relief Fundraising Event") to R.string.type_emergency_relief_fundraising_event
+        normalize("Emergency Relief Fundraising Event") to R.string.type_emergency_relief_fundraising_event,
+
+
+        // NEW EVENTS
+        normalize("Food Drives and Community Kitchen") to R.string.type_food_drives_and_community_kitchen,
+        normalize("Fundraising Event") to R.string.type_fundraising_event,
+        normalize("Educational Workshops") to R.string.type_educational_workshops,
+        normalize("Awareness Campaigns/Seminars") to R.string.type_awareness_campaigns,
+        normalize("Emergency Relief Distribution/Disaster Response") to R.string.type_emergency_relief_distribution,
+        normalize("School Outreach Program") to R.string.school_outreach
+
     )
 
     /**

@@ -4,4 +4,8 @@
     <color name="event_box_color">#F9A825</color> <!-- Yellow -->
     <color name="transition_anim">#000000</color>
 
+
+    <!--    Dividers-->
+    <color name="dividerColor">#FBC02D</color>
+
 </resources>

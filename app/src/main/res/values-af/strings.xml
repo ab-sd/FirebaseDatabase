@@ -46,5 +46,14 @@
     <string name="server_query_failed_fallback">Bedienernavrae het misluk. Val terug op kliënt-kant opvraging.</string>
     <string name="return_only">Keer terug na Gebeurtenisse-bladsy</string>
 
+    <!--    New Event Types-->
+    <string name="type_food_drives_and_community_kitchen">Voedsel- en Gemeenskapskombuis</string>
+    <string name="type_fundraising_event">Fondseinsameling</string>
+    <string name="type_educational_workshops">Opvoedkundige Werkswinkels</string>
+    <string name="type_awareness_campaigns">Bewusmakingsveldtogte / Seminars</string>
+    <string name="type_emergency_relief_distribution">Noodhulpverspreiding / Rampreaksie</string>
+    <string name="school_outreach">Skooluitreikprogram</string>
+    <string name="read_more">Tik om meer te lees</string>
+
 
 </resources>

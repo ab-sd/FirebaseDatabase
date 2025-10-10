@@ -806,13 +806,14 @@ class AddUserFragment : Fragment(R.layout.fragment_add_user) {
 
     companion object {
         private val TYPES = arrayOf(
-            "Community Feeding Program",
-            "Back-to-School Drive",
+            "Food Drives and Community Kitchen",
+            "Fundraising Event",
             "Children’s Health and Wellness Fair",
-            "Sports and Recreation Day",
-            "Community Clean-Up and Beautification",
-            "Food and Hygiene Pack Distribution",
-            "Emergency Relief Fundraising Event"
+            "Educational Workshops",
+            "School Outreach Program",
+            "Awareness Campaigns/Seminars",
+            "Emergency Relief Distribution/Disaster Response",
+            "Sports and Recreation Day"
         )
     }
 }

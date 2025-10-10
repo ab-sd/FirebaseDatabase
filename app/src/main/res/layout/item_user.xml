@@ -87,7 +87,19 @@
                     android:text=""
                     android:textColor="#333333"
                     android:textSize="14sp"
-                    android:textStyle="italic" />
+                    android:textStyle="italic"
+                    android:ellipsize="end"
+                    android:maxLines="2"/>
+                <TextView
+                    android:id="@+id/tv_read_more"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/read_more"
+                    android:textColor="#0909EB"
+                    android:visibility="gone"
+                    android:textSize="13sp"
+                    android:layout_marginTop="4dp"/>
+
 
                 <!-- Only DATE badge shown in collapsed state -->
                 <LinearLayout

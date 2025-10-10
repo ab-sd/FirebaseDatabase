@@ -59,5 +59,14 @@
     <string name="server_query_failed_fallback">Server query failed. Falling back to client-side fetch.</string>
     <string name="return_only">Return to Events Page</string>
 
+    <!--    New Event Types-->
+    <string name="type_food_drives_and_community_kitchen">Food Drives and Community Kitchen</string>
+    <string name="type_fundraising_event">Fundraising Event</string>
+    <string name="type_educational_workshops">Educational Workshops</string>
+    <string name="type_awareness_campaigns">Awareness Campaigns/Seminars</string>
+    <string name="type_emergency_relief_distribution">Emergency Relief Distribution/Disaster Response</string>
+    <string name="school_outreach">School Outreach Program</string>
+    <string name="read_more">Tap to read more</string>
+
 
 </resources>

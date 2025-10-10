@@ -13,15 +13,21 @@
 android:orientation="vertical"
 android:layout_width="match_parent"
 android:layout_height="wrap_content"
-android:divider="?android:attr/dividerHorizontal"
-android:showDividers="middle"
-android:dividerPadding="12dp">
+>
 
 <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Event Title"
+        android:textColor="#F9A825"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"/>
+
 <com.google.android.material.textfield.TextInputLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:hint="Please enter the title of event"
+    android:hint="Please enter the title of the event"
     app:boxStrokeColor="#FBC02D"
     app:hintTextColor="#F9A825">
 
@@ -31,7 +37,7 @@ android:dividerPadding="12dp">
         android:layout_height="wrap_content"/>
 </com.google.android.material.textfield.TextInputLayout>
 
-<!-- Event Type (Spinner) -->
+    <!-- Event Type (Spinner) -->
 <TextView
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
@@ -49,7 +55,6 @@ android:dividerPadding="12dp">
         android:focusable="true"
         android:padding="0dp">
 
-        <!-- Your spinner (match_parent so it occupies whole area) -->
         <Spinner
             android:id="@+id/spinner_event_type"
             android:layout_width="match_parent"
@@ -57,7 +62,7 @@ android:dividerPadding="12dp">
             android:background="@drawable/spinner_background_selector"
             android:popupBackground="@drawable/spinner_box_filled"
             android:paddingStart="4dp"
-            android:paddingEnd="44dp" /> <!-- give space on the right for the icon -->
+            android:paddingEnd="44dp" />
 
         <!-- Arrow icon overlaid on the right -->
         <ImageView
@@ -69,7 +74,8 @@ android:dividerPadding="12dp">
             android:src="@drawable/ic_arrow_drop_down"  />
     </FrameLayout>
 
-<!-- Event Description -->
+
+    <!-- Event Description -->
 <TextView
     android:layout_marginTop="12dp"
     android:layout_width="wrap_content"
@@ -90,7 +96,8 @@ android:dividerPadding="12dp">
         android:layout_height="wrap_content"/>
 </com.google.android.material.textfield.TextInputLayout>
 
-<!-- isiZulu Description -->
+
+    <!-- isiZulu Description -->
 <TextView
     android:layout_marginTop="12dp"
     android:layout_width="wrap_content"
@@ -150,7 +157,7 @@ android:dividerPadding="12dp">
     android:paddingTop="4dp"
     android:layout_marginStart="4dp"/>
 
-<!-- Afrikaans Description -->
+    <!-- Afrikaans Description -->
 <TextView
     android:layout_marginTop="12dp"
     android:layout_width="wrap_content"
@@ -208,11 +215,20 @@ android:dividerPadding="12dp">
     android:textColor="#0909EB"
     android:textStyle="italic"
     android:paddingTop="4dp"
-    android:layout_marginStart="4dp"/>
+    android:layout_marginStart="4dp"
+    android:paddingBottom="5dp"/>
 
-<!-- Date and Time -->
+
+    <!-- Date and Time -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Event Date/Time"
+        android:textColor="#F9A825"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"/>
 <LinearLayout
-    android:layout_marginTop="16dp"
+    android:layout_marginTop="5dp"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -241,9 +257,17 @@ android:dividerPadding="12dp">
        />
 </LinearLayout>
 
-<!-- Duration -->
+
+    <!-- Duration -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Event Duration (min)"
+        android:textColor="#F9A825"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"/>
 <com.google.android.material.textfield.TextInputLayout
-    android:layout_marginTop="12dp"
+    android:layout_marginTop="3dp"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     app:boxStrokeColor="#FBC02D"
@@ -252,16 +276,23 @@ android:dividerPadding="12dp">
     <com.google.android.material.textfield.TextInputEditText
         android:id="@+id/et_duration"
         android:inputType="number"
-        android:hint="Enter the expected duration of the event (minutes)"
+        android:hint="Enter duration in minutes"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
 </com.google.android.material.textfield.TextInputLayout>
 
-<!-- Location -->
+
     <!-- Location -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Event Location"
+        android:textColor="#F9A825"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"/>
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/til_location"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="3dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:boxStrokeColor="#FBC02D"
@@ -304,7 +335,7 @@ android:dividerPadding="12dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_map_link"
-                android:hint="Paste Google Maps share link (https://...)"
+                android:hint="Paste Google Maps link (https://...)"
                 android:inputType="textUri"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"/>
@@ -335,7 +366,7 @@ android:dividerPadding="12dp">
         android:text="Pick Images (max 15)"
         android:textColor="@color/button_text"
         android:backgroundTint="@color/button_tint"
-        app:icon="@drawable/ic_camera"
+        android:drawableLeft="@android:drawable/ic_menu_camera"
         app:iconTint="@color/button_text"
         app:iconSize="25dp"
         app:iconPadding="8dp"
@@ -350,7 +381,10 @@ android:dividerPadding="12dp">
     android:text="No images selected"
     android:textColor="#616161"/>
 
-<!-- RecyclerView -->
+    <View style="@style/DividerStyle" />
+
+
+    <!-- RecyclerView -->
 <androidx.recyclerview.widget.RecyclerView
     android:id="@+id/recycler_selected_images"
     android:layout_marginTop="8dp"
@@ -358,6 +392,8 @@ android:dividerPadding="12dp">
     android:layout_height="wrap_content"
     android:clipToPadding="false"
     android:padding="4dp"/>
+
+    <View style="@style/DividerStyle" />
 
 
     <ProgressBar
@@ -403,9 +439,5 @@ android:dividerPadding="12dp">
 
 
     </LinearLayout>
-
-
-
-
 </LinearLayout>
     </ScrollView>
