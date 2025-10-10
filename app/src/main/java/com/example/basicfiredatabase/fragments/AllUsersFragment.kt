@@ -157,12 +157,14 @@ class AllUsersFragment : Fragment(R.layout.fragment_all_users) {
             getString(R.string.header_past_desc)
         }
 
+        val imageToUse = if (showUpcomingFilter) R.drawable.image1_compressed else R.drawable.image4
+
         headerAdapter.setData(HeaderData(
             title = title,
             description = desc,
             showCta = !showUpcomingFilter,
             ctaText = getString(R.string.view_all_past_images),
-            imageRes = R.drawable.image1_compressed
+            imageRes = imageToUse
         ))
     }
 

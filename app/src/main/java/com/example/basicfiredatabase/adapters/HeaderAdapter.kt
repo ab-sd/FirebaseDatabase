@@ -42,8 +42,11 @@ class HeaderAdapter(
 
         holder.btnCta.setOnClickListener { onCtaClick?.invoke() }
 
-        holder.ivImage.setImageResource(R.drawable.image1_compressed)
-
+        data.imageRes?.let {
+            holder.ivImage.setImageResource(it)
+        } ?: run {
+            holder.ivImage.setImageResource(R.drawable.ic_placeholder)
+        }
 
 
         // For now we use the placeholder image defined in XML. If you later want a dynamic image:
