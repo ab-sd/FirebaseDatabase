@@ -16,18 +16,33 @@ class EventsFragment : Fragment(R.layout.fragment_events) {
         val tabLayout = view.findViewById<TabLayout>(R.id.tabLayout)
 
         viewPager.adapter = object : FragmentStateAdapter(this) {
-            override fun getItemCount(): Int = 2
-            override fun createFragment(position: Int) =
-                if (position == 0) AllUsersFragment.newInstance(true)
-                else AllUsersFragment.newInstance(false)
+            override fun getItemCount(): Int = 3
+
+
+            override fun createFragment(position: Int) = when (position) {
+                0 -> AllUsersFragment.newInstance(true)
+                1 -> AllUsersFragment.newInstance(false)
+                2 -> HelloFragment.newInstance()
+                else -> throw IndexOutOfBoundsException("Invalid page index")
+            }
         }
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, pos ->
-            tab.text = if (pos == 0)
-                getString(R.string.tab_upcoming_events)
-            else
-                getString(R.string.tab_past_events)
+        // keep titles tidy — fetch strings from resources
+        val titles = arrayOf(
+            getString(R.string.tab_upcoming_events),
+            getString(R.string.tab_past_events),
+            getString(R.string.tab_hello)
+        )
 
+        TabLayoutMediator(tabLayout, viewPager) { tab, pos ->
+            tab.text = titles[pos]
+            tab.setIcon(
+                when (pos) {
+                    0 -> R.drawable.ic_calendar
+                    1 -> R.drawable.ic_broken_image
+                    else -> R.drawable.ic_location_boxed
+                }
+            )
         }.attach()
     }
 }

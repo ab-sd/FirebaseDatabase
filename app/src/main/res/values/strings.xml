@@ -67,6 +67,7 @@
     <string name="type_emergency_relief_distribution">Emergency Relief Distribution/Disaster Response</string>
     <string name="school_outreach">School Outreach Program</string>
     <string name="read_more">Tap to read more</string>
+    <string name="tab_hello">Third Page</string>
 
 
 </resources>

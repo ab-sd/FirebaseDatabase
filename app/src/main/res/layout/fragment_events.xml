@@ -3,48 +3,30 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
 
-    <!-- AppBarLayout holds the (compact) TabLayout and will be scrolled away -->
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appbar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar">
-
-        <!-- A thin container that is scrollable; the flags let it scroll off on upward scroll -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            app:layout_scrollFlags="scroll|enterAlways">
-
-            <!-- Keep TabLayout compact: width wrap_content centered inside a container -->
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp">
-
-                <com.google.android.material.tabs.TabLayout
-                    android:id="@+id/tabLayout"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    app:tabIndicatorColor="@color/tab_indicator"
-                    app:tabTextColor="@color/tab_text_selector"
-                    app:tabSelectedTextColor="@color/selected_tab_text"
-                    app:tabBackground="@drawable/tab_background"
-                    app:tabMode="fixed"
-                    app:tabGravity="center" />
-            </FrameLayout>
-        </LinearLayout>
-    </com.google.android.material.appbar.AppBarLayout>
-
-    <!-- ViewPager2 participates in nested scrolling to collapse the AppBar -->
+    <!-- ViewPager2 fills the screen above the TabLayout -->
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+        android:layout_above="@id/tabLayout" />
+
+    <!-- Stylish Bottom TabLayout -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_bottom_tabs"
+        android:elevation="8dp"
+        android:paddingHorizontal="8dp"
+        app:tabIndicatorColor="@color/tab_indicator"
+        app:tabIndicatorHeight="3dp"
+        app:tabMode="fixed"
+        app:tabGravity="fill"
+        app:tabTextColor="@color/tab_text_selector"
+        app:tabSelectedTextColor="@color/selected_tab_text" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
