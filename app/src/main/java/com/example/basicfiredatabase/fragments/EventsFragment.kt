@@ -7,15 +7,18 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.example.basicfiredatabase.R
 import com.google.android.material.tabs.TabLayoutMediator
 import androidx.viewpager2.widget.ViewPager2
+import com.example.basicfiredatabase.databinding.FragmentEventsBinding
 import com.google.android.material.tabs.TabLayout
 
 class EventsFragment : Fragment(R.layout.fragment_events) {
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val viewPager = view.findViewById<ViewPager2>(R.id.viewPager)
-        val tabLayout = view.findViewById<TabLayout>(R.id.tabLayout)
+    private var _binding: FragmentEventsBinding? = null
+    private val binding get() = _binding!!
 
-        viewPager.adapter = object : FragmentStateAdapter(this) {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        _binding = FragmentEventsBinding.bind(view)
+
+        binding.viewPager.adapter =object : FragmentStateAdapter(this) {
             override fun getItemCount(): Int = 3
 
 
@@ -34,7 +37,7 @@ class EventsFragment : Fragment(R.layout.fragment_events) {
             getString(R.string.tab_hello)
         )
 
-        TabLayoutMediator(tabLayout, viewPager) { tab, pos ->
+        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, pos ->
             tab.text = titles[pos]
             tab.setIcon(
                 when (pos) {
